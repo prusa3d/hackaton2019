@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                margin: 0 auto;
+                max-width: 1280px;
+                background-color: gray;
+                padding: 0 1em 0 1em;
+            }
+            input {
+                width: 4em;
+            }
+
+            #measure_map {
+                background-color: white;
+            }
+            #measure_map {
+                display: none;
+            }
+            #example_map {
+                background-color: #f8651b;
+            }
+            #console {
+                width: 100%;
+                min-height: 3em;
+                font-size: 140%;
+            }
+            @font-face {
+                font-family: "Atlas Grotesk Black";
+                src: url(AtlasGrotesk-Black.otf) format("opentype");
+            }
+            @font-face {
+                font-family: "Atlas Grotesk Bold";
+                src: url(AtlasGrotesk-Bold.otf) format("opentype");
+            }
+            @font-face {
+                font-family: "Atlas Grotesk Regular";
+                src: url(AtlasGrotesk-Regular.otf) format("opentype");
+            }
+            @font-face {
+                font-family: "Atlas Grotesk Medium";
+                src: url(AtlasGrotesk-Medium.otf) format("opentype");
+            }
+            @font-face {
+                font-family: "Atlas Grotesk Light";
+                src: url(AtlasGrotesk-Light.otf) format("opentype");
+            }
+            @font-face {
+                font-family: "Atlas Grotesk Thin";
+                src: url(AtlasGrotesk-Thin.otf) format("opentype");
+            }
+            @font-face {
+                font-family: "Px437 IBM ISO8";
+                src: url(Px437_IBM_ISO8.ttf) format("truetype");
+            }
+            @font-face {
+                font-family: "Px437 IBM ISO9";
+                src: url(Px437_IBM_ISO9.ttf) format("truetype");
+            }
+        </style>
+    </head>
+    <body>
+        <h1>PNG Font generator for A3ides firmware</h1>
+
+        <div>
+            <label for="width">Character width:</label>
+            <input id="width" type="number" value="16" onchange="redraw()"/>
+
+            <label for="height">Character height:</label>
+            <input id="height" type="number" value="20" onchange="redraw()"/>
+        </div>
+
+        <div>
+            <label for="size">Font size:</label>
+            <input id="size" type="number" value="20" onchange="redraw()"/>
+
+            <label for="yoffset">Character y offset:</label>
+            <input id="yoffset" type="number" value="0" onchange="redraw()"/>
+
+            <label for="font">Font:</label>
+            <select id="font" onchange="redraw()">
+                <option style="font-family: Monospace">Monospace</option>
+                <option style="font-family: Monospace">Noto Mono</option>
+                <option style="font-family: Monospace">Liberation Mono</option>
+                <option style="font-family: Monospace">Px437 IBM ISO8</option>
+                <option style="font-family: Monospace">Px437 IBM ISO9</option>
+
+                <option style="font-family: Atlas Grotesk Thin">Atlas Grotesk Thin</option>
+                <option style="font-family: Atlas Grotesk Light">Atlas Grotesk Light</option>
+                <option style="font-family: Atlas Grotesk Regular">Atlas Grotesk Regular</option>
+                <option style="font-family: Atlas Grotesk Medium">Atlas Grotesk Medium</option>
+                <option style="font-family: Atlas Grotesk Bold">Atlas Grotesk Bold</option>
+                <option style="font-family: Atlas Grotesk Black">Atlas Grotesk Black</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="bold">Bold</label>
+            <input id="bold" type="checkbox" onchange="redraw()">
+
+            <label for="example_text">Example text:</label><br>
+            <textarea id="example_text" rows="4" cols="40" oninput="redraw()">
+Mmm Thermal Hotend Mysthics--[Ok][Fail]
+Mmm Thermal Hotend Mysthics__[OK][FAIL]
+Celý bílý kůň. CELÝ BÍLÝ KŮŇ
+            </textarea>
+        </div>
+
+        <pre id="console">
+        </pre>
+
+        <div>
+            <a href="#" onclick="download_white(this)">
+                <canvas id="white_map" width="256" height="300">
+                    Your browser does not support the HTML5 canvas tag.
+                </canvas>
+            </a>
+            <a href="#" onclick="download_black(this)">
+                <canvas id="black_map" width="256" height="300">
+                    Your browser does not support the HTML5 canvas tag.
+                </canvas>
+            </a>
+            <canvas id="measure_map" width="40" height="40">
+            </canvas>
+        </div>
+        <div>
+            <canvas id="example_map" width="1" height="1">
+                Your browser does not support the HTML5 canvas tag.
+            </canvas>
+        </div>
+
+
+<script>
+    var char_width = document.getElementById("width");
+    var char_height = document.getElementById("height");
+    var char_size = document.getElementById("size");
+    var char_font = document.getElementById("font");
+    var char_bold = document.getElementById("bold");
+    var char_yoffset = document.getElementById("yoffset");
+    var example_text = document.getElementById("example_text")
+
+    var wc = document.getElementById("white_map");
+    var bc = document.getElementById("black_map");
+    var mc = document.getElementById("measure_map");
+    var ec = document.getElementById("example_map");
+
+    var log = document.getElementById("console");
+
+    var wctx = wc.getContext("2d");
+    var bctx = bc.getContext("2d");
+    var mctx = mc.getContext("2d");
+    var ectx = ec.getContext("2d");
+
+    function measureHight(text, width){
+        if (width == 0) {
+            return 0;
+        }
+
+        mctx.clearRect(0, 0, mc.width, mc.height);
+        mctx.fillText(text, 0, 0);
+        let data = mctx.getImageData(0, 0, width, mc.height).data;  // only the char
+
+        for (var y=mc.height-1; y>=0; y--){
+            for (var x=width-1; x>=0; x--){
+                // if red or alpha pixel from end
+                if (data[(y*width+x)*4] || data[(y*width+x)*4+3]) {
+                    return y+1;                       // found pixel on line
+                }
+            }
+        }
+        return 0;
+    }
+
+    function redraw(){
+        let cwidth = parseInt(char_width.value);
+        let cheight = parseInt(char_height.value);
+        let csize = parseInt(char_size.value);
+        let bold = char_bold.checked ? "bold " : "";
+        let yoffset = parseInt(char_yoffset.value);
+        let font = bold+csize+"px "+char_font.value;
+
+        // chanege the canvas size first
+        wc.width = cwidth * 16;
+        //wc.height = cheight * 16;
+        wc.height = cheight * 6;
+        bc.width = cwidth * 16;
+        //bc.height = cheight * 16;
+        bc.height = cheight * 6;
+        ec.width = 40*cwidth;
+        ec.height = 4*cheight;
+
+        wctx.fillStyle="white";
+        wctx.fillRect(0, 0, wc.width, wc.height);
+        wctx.font = font;
+        wctx.textBaseline = "top";
+        wctx.fillStyle="black";
+
+        bctx.fillStyle="black";
+        bctx.fillRect(0, 0, wc.width, wc.height);
+        bctx.font = font;
+        bctx.fillStyle="white";
+        bctx.textBaseline = "top";
+
+        mctx.font = font;
+        mctx.textBaseline = "top";
+
+        ectx.font = font;
+        ectx.textBaseline = "top";
+
+        let max_width = 0;
+        let max_height = 0;
+
+        bctx.strokeStyle = "green";
+        for (let y=1; y<6; y++){        // 16 celých 256
+            for (let x=1; x<16; x++){
+                bctx.beginPath();
+                bctx.lineTo(0, y*cheight);
+                bctx.lineTo(16*cwidth, y*cheight);
+                bctx.stroke();
+            }
+        }
+
+        for (let y=0; y<6; y++){        // 16 celých 256
+            for (let x=0; x<16; x++){
+                let character = y*16+x+32;
+                if (character == 127) {
+                    character = 176;
+                }
+
+                if (character == 96) {
+                    wctx.fillText(String.fromCharCode(character), x*cwidth, (y*cheight)+yoffset+1);
+                    bctx.fillText(String.fromCharCode(character), x*cwidth, (y*cheight)+yoffset+1);
+                } else {
+                    wctx.fillText(String.fromCharCode(character), x*cwidth, (y*cheight)+yoffset);
+                    bctx.fillText(String.fromCharCode(character), x*cwidth, (y*cheight)+yoffset);
+                }
+
+                let width = Math.ceil(mctx.measureText(String.fromCharCode(character)).width);
+                let height = measureHight(String.fromCharCode(character), width);
+                max_width = Math.max(max_width, width);
+                max_height = Math.max(max_height, height);
+            }
+        }
+
+        log.textContent = "Maximum font character width is: "+max_width+" px.\n"+
+                          "Maximum font character height is: "+max_height+" px.";
+
+        let text = example_text.value;
+        let y = 0;
+        let x = 0;
+
+        for (let i=0; i<text.length; i++){
+            if (text[i] == '\n'){
+                y++;
+                x = 0;
+            } else {
+                ectx.fillText(text[i], x*cwidth, y*cheight);
+                x++;
+            }
+        }
+    }
+
+    function download_white(elm){
+        let cwidth = parseInt(char_width.value);
+        let cheight = parseInt(char_height.value);
+        let csize = parseInt(char_size.value);
+        let font = csize+"px "+char_font.value;
+
+        console.log(elm);
+        elm.download = "white_"+cwidth+"x"+cheight+"_"+font+".png";
+        elm.href = wc.toDataURL("image/png").replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+    }
+
+    function download_black(elm){
+        let cwidth = parseInt(char_width.value);
+        let cheight = parseInt(char_height.value);
+        let csize = parseInt(char_size.value);
+        let font = csize+"px "+char_font.value;
+
+        console.log(elm);
+        elm.download = "black_"+cwidth+"x"+cheight+"_"+font+".png";
+        elm.href = bc.toDataURL("image/png").replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+    }
+
+    document.addEventListener("DOMContentLoaded", function(event){
+        redraw();
+    });
+
+</script>
+
+</body>
+</html>
