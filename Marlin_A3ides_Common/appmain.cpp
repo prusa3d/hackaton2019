@@ -83,11 +83,12 @@ void app_run(void)
 #ifdef SIM_HEATER
 	sim_heater_init();
 #endif //SIM_HEATER
-
+#if (0)
 	//DBG("before setup (%ld ms)", HAL_GetTick());
 	if (diag_fastboot || (!sys_fw_is_valid()))
 		marlin_server_stop_processing();
 	else
+#endif
 		app_setup();
 	//DBG("after setup (%ld ms)", HAL_GetTick());
 

@@ -10,6 +10,8 @@
 #define DBG_LEVEL 0
 #endif //DBG_LEVEL
 
+#define DBG_SWO
+
 
 #if (DBG_LEVEL >= 3)
 #define _dbg3 _dbg
