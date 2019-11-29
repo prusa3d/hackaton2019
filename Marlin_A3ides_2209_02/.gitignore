@@ -1,0 +1,7 @@
+/Debug/
+/Release/
+/Debug_Boot/
+/Release_Boot/
+/*.launch
+/.metadata
+/.settings
