@@ -131,7 +131,7 @@ extern void gui_run(void);
 
 extern void Error_Handler(void);
 
-extern void lwsgi_init(void);
+extern void lwsapi_init(void);
 
 /* USER CODE END PFP */
 
@@ -1024,7 +1024,7 @@ void StartWebServerTask(void const* argument)
     /* USER CODE BEGIN StartWebServerTask */
     // osThreadSuspend(0);
     MX_LWIP_Init();
-    lwsgi_init();
+    lwsapi_init();
     /* Infinite loop */
     for (;;) {
         osDelay(1);

@@ -31,7 +31,7 @@ function on_update_printer(xhr){
 	} else {
 		status_nozzle.querySelector("div>[warming]").style.visibility = "hidden";
 	}
-	if (offset < -2 && nozzle["target"] > 49){
+	if (offset < -2 && nozzle["actual"] > 49){
 		status_nozzle.querySelector("div>[cooling]").style.visibility = "visible";
 	} else {
 		status_nozzle.querySelector("div>[cooling]").style.visibility = "hidden";
@@ -47,7 +47,7 @@ function on_update_printer(xhr){
 		status_bed.querySelector("div>[warming]").style.visibility = "hidden";
 	}
 
-	if (offset < -2 && nozzle["bed"] > 49){
+	if ((offset < -2) && (bed["actual"] > 49)){
 		status_bed.querySelector("div>[cooling]").style.visibility = "visible";
 	} else {
 		status_bed.querySelector("div>[cooling]").style.visibility = "hidden";
@@ -92,7 +92,7 @@ function ajax_get(url, callback){
 
 function update_status(){
 	ajax_get("/api/printer", on_update_printer);
-	ajax_get("/api/job", on_update_job);
+	// ajax_get("/api/job", on_update_job);
 }
 
 setInterval(update_status, 500);

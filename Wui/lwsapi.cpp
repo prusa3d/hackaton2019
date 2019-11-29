@@ -2,38 +2,39 @@
 #include <cstring>
 #include "dbg.h"
 
-#include "lwsgi.h"
+#include "lwsapi.h"
 
-#define LIGHT_WSGI_PORT 80
-#define LIGHT_WSGI_RETRIES 4              // 8 seconds timeout
-#define LIGHT_WSGI_POLL_INTERVAL 4        // once a two seconds
+#define LIGHT_WSAPI_PORT 80
+#define LIGHT_WSAPI_RETRIES 4              // 8 seconds timeout
+#define LIGHT_WSAPI_POLL_INTERVAL 4        // once a two seconds
 
-#define lwsgi_dbg _dbg
-#define lwsgi_error _dbg
+#define lwsapi_dbg _dbg
+#define lwsapi_error _dbg
+
+static const char* HTTP_10 = "HTTP/1.0";
 
 struct Context_t {
 	struct tcp_pcb * pcb;
-	struct pbuf * input;		/*< wsgi input >*/
+	struct pbuf * input;		/*< wsapi input >*/
 	uint8_t retries;			/*< retries >*/
-	Environment_t env;			/**< Request WSGI environment */
+	Environment_t env;			/**< Request WSAPI environment */
 	void* coroutine_arg;		/**< Argument set by application */
 	coroutine_fn coroutine;		/**< Coroutine returned by application */
 	Message_t message;			/**< Last message returned from application */
+	char* buffer;				/**< Buffer for internal output data */
 	size_t m_position;			/**< Position of data in last message which is
 									 write not yet. */
 
 	Context_t(struct tcp_pcb * pcb)
 		:pcb(pcb),input(nullptr),retries(0),coroutine_arg(nullptr),
-		coroutine(nullptr)
+		coroutine(nullptr),message({nullptr, nullptr, nullptr, 0}),
+		buffer(nullptr)
 	{
 		tcp_arg(pcb, this);
 		/* Environment_t C struct constructor */
 		env.method = nullptr;
 		env.request_uri = nullptr;
 		env.headers = nullptr;
-		/* Message_t C struct consturctor */
-		message.data = nullptr;
-		message.length = 0;
 	}
 
 	~Context_t()
@@ -44,9 +45,9 @@ struct Context_t {
 		Header_t* it = nullptr;
 		while (env.headers != nullptr){
 			it = env.headers->next;
-			free(env.headers->key);
-			free(env.headers->value);
-			free(env.headers);
+			free(const_cast<char*>(env.headers->key));
+			free(const_cast<char*>(env.headers->value));
+			delete(env.headers);
 			env.headers = it;
 		}
 		if (input != nullptr){
@@ -59,29 +60,25 @@ struct Context_t {
 	err_t parse_headers(struct pbuf *p);
 };
 
-size_t lwsgi_write(Context_t* ctx, const uint8_t* data, size_t len);
-inline size_t lwsgi_write(Context_t* ctx, const char * data)
+
+static inline bool empty_message(const Message_t& msg)
 {
-	return lwsgi_write(ctx, (const uint8_t*)(data), strlen(data));
+	return (msg.response == nullptr && msg.headers == nullptr && msg.length == 0);
 }
 
-void lwsgi_call(Context_t* ctx);
-
-
-/*
-inline size_t lwsgi_write_state(Environment_t* env, const char* state){
-	return
-		lwsgi_write(env, HTTP_10) +
-		lwsgi_write(env, " ") +
-		lwsgi_write(env, state) +
-		lwsgi_write(env, "\r\n");
+static size_t lwsapi_write(Context_t* ctx, const uint8_t* data, size_t len);
+static inline size_t lwsapi_write(Context_t* ctx, const char * data)
+{
+	return lwsapi_write(ctx, (const uint8_t*)(data), strlen(data));
 }
-*/
 
-err_t check_len(size_t len, size_t p_len)
+//! Proccess message from coroutine_fn, and call coroutine_fn for next work
+static void lwsapi_call(Context_t* ctx);
+
+static err_t check_len(size_t len, size_t p_len)
 {
 	if (len > p_len) {		// len or tot-len ?!
-		lwsgi_error("parse_headers: End of line not found!");
+		lwsapi_error("parse_headers: End of line not found!");
 		return ERR_VAL;
 	}
 	return ERR_OK;
@@ -99,13 +96,13 @@ err_t Context_t::parse_request(struct pbuf *p)
 		return ERR_VAL;
 	}
 
-	env.method = (char*)calloc(sizeof(char)*len+1, sizeof(char));
+	env.method = (char*)calloc(len+1, sizeof(char));
  	memcpy(env.method, start, len);
 
 	start = end + 1;
 	end = strchr(start,' ');
 	len = end - start;
-	env.request_uri = (char*)calloc(sizeof(char)*len+1, sizeof(char));
+	env.request_uri = (char*)calloc(len+1, sizeof(char));
  	memcpy(env.request_uri, start, len);
 
 	return ERR_OK;
@@ -147,14 +144,14 @@ err_t Context_t::parse_headers(struct pbuf *p)
 
 		key = strchr(start, ':');
 		siz = key - start;
-		header->key = (char*)calloc(sizeof(char)*siz+1, sizeof(char));
-		memcpy(header->key, start, siz);
+		header->key = (char*)calloc(siz+1, sizeof(char));
+		memcpy(const_cast<char*>(header->key), start, siz);
 
 		key +=2;					// skip: ": "
 		val = strchr(key, '\r');
 		siz = val - key;
-		header->value = (char*)calloc(sizeof(char)*siz+1, sizeof(char));
-		memcpy(header->value, key, siz);
+		header->value = (char*)calloc(siz+1, sizeof(char));
+		memcpy(const_cast<char*>(header->value), key, siz);
 
 		start = end + 2;			// skip full LF CR
 		end = strchr(start, '\r');
@@ -171,22 +168,21 @@ err_t Context_t::parse_headers(struct pbuf *p)
 }
 
 
-static err_t lwsgi_poll(void *arg, struct tcp_pcb *pcb);
+static err_t lwsapi_poll(void *arg, struct tcp_pcb *pcb);
 
 const char * http_bad_request =
 	"HTTP/1.0 400 Bad Request\n"
-	"Server: LwIP WSGI\n"
+	"Server: LwIP WSAPI\n"
 	"Content-Type: text/plain\n"
 	"\n"
 	"Bed Request";
 
 const char * http_internal_server =
 	"HTTP/1.0 500 Internal Server Error\n"
-	"Server: LwIP WSGI\n"
+	"Server: LwIP WSAPI\n"
 	"Content-Type: text/plain\n"
 	"\n"
 	"Internal Server Error";
-
 
 
 static err_t close_conn(struct tcp_pcb* pcb, Context_t* ctx=nullptr)
@@ -211,7 +207,7 @@ static err_t close_conn(struct tcp_pcb* pcb, Context_t* ctx=nullptr)
 
 	if (err != ERR_OK) {
 		// close in poll, but could be happened ?
-		tcp_poll(pcb, lwsgi_poll, LIGHT_WSGI_POLL_INTERVAL);
+		tcp_poll(pcb, lwsapi_poll, LIGHT_WSAPI_POLL_INTERVAL);
 	}
 
 	return err;
@@ -224,7 +220,7 @@ static err_t close_conn(struct tcp_pcb* pcb, Context_t* ctx=nullptr)
  *
  * This could be increased, but we don't want to waste resources for bad connections.
  */
-static err_t lwsgi_poll(void *arg, struct tcp_pcb *pcb)
+static err_t lwsapi_poll(void *arg, struct tcp_pcb *pcb)
 {
 	if (arg == nullptr){
 		if (close_conn(pcb) == ERR_MEM){
@@ -235,47 +231,100 @@ static err_t lwsgi_poll(void *arg, struct tcp_pcb *pcb)
 
 	Context_t * ctx = static_cast<Context_t *>(arg);
 	ctx->retries++;
-	if (ctx->retries == LIGHT_WSGI_RETRIES) {
-		lwsgi_dbg("\tmax retries, close\n");
+	if (ctx->retries == LIGHT_WSAPI_RETRIES) {
+		lwsapi_dbg("\tmax retries, close\n");
 		return close_conn(pcb, ctx);
 	}
 
 	return ERR_OK;
 }
 
-void lwsgi_call(Context_t* ctx)
+//! process message.response to internal ctx->buffer
+static void lwsapi_prepare_response(Context_t* ctx)
 {
-	if (ctx->message.length == 0){		// message was sent, call the coroutine
-		ctx->message = ctx->coroutine(ctx->coroutine_arg);
-		ctx->m_position = 0;
-		if (ctx->message.length == EOF){
-			// tcp_output(ctx->pcb);
-			close_conn(ctx->pcb, ctx);
+	// HTTP/1.0\ 200 OK\r\n\0
+	size_t size = strlen(HTTP_10) + strlen(ctx->message.response) + 4;
+	// TODO: check size
+	ctx->buffer = (char*)calloc(size, sizeof(char));
+	snprintf(ctx->buffer, size, "%s %s\r\n", HTTP_10, ctx->message.response);
+	ctx->message.response = nullptr;
+}
+
+//! process message.headers to internal ctx->buffer
+static void lwsapi_prepare_header(Context_t* ctx)
+{
+	const Header_t* header = ctx->message.headers;
+	// Key\:\ Value\r\n\r\n\0
+	size_t size = strlen(header->key) + strlen(header->value) + 7;
+	// TODO: check size
+	ctx->buffer = (char*)calloc(size, sizeof(char));
+	if (header->next != nullptr) {
+		snprintf(ctx->buffer, size, "%s: %s\r\n",
+				header->key, header->value);
+	} else {  // last header needs one CRLF before payload
+		snprintf(ctx->buffer, size, "%s: %s\r\n\r\n",
+				header->key, header->value);
+	}
+	ctx->message.headers = header->next;
+}
+
+static void lwsapi_call(Context_t* ctx)
+{
+	while (1) {
+		// internal buffer and message was sent, call the coroutine
+		if (ctx->buffer == nullptr && empty_message(ctx->message))
+		{
+			ctx->message = ctx->coroutine(ctx->coroutine_arg);
+			ctx->m_position = 0;
+			if (ctx->message.length == EOF){
+				close_conn(ctx->pcb, ctx);
+				return;
+			}
+		}
+
+		// try to send internal buffer if exists
+		if (ctx->buffer != nullptr) {
+			size_t size = strlen(ctx->buffer+ctx->m_position);
+			size_t send = lwsapi_write(ctx,
+					(const uint8_t*)ctx->buffer+ctx->m_position, size);
+			if (send == size) {
+				free(ctx->buffer);
+				ctx->buffer = nullptr;
+				ctx->m_position = 0;
+			} else {  // not send all data, tcp buffer is full
+				ctx->m_position += send;
+				tcp_output(ctx->pcb);
+				return;
+			}
+		}
+
+		if (ctx->message.response != nullptr){
+			lwsapi_prepare_response(ctx);
+			continue;
+		}
+
+		if (ctx->message.headers != nullptr){
+			lwsapi_prepare_header(ctx);
+			continue;
+		}
+
+		size_t send = lwsapi_write(ctx, ctx->message.payload+ctx->m_position,
+				ctx->message.length);
+		ctx->m_position += send;
+		ctx->message.length -= send;
+		if (ctx->message.length > 0)
+		{
+			tcp_output(ctx->pcb);	// flush the data => free the buffer
 			return;
 		}
 	}
-
-	size_t send = lwsgi_write(ctx, ctx->message.data+ctx->m_position,
-			ctx->message.length);
-	ctx->m_position += send;
-	ctx->message.length -= send;
-	if (ctx->message.length > 0)
-	{
-		tcp_output(ctx->pcb);	// flush the data => free the buffer
-		return;
-	}
-
-	// have some space in tcp packet
-	lwsgi_call(ctx);
 }
 
-
-
-size_t lwsgi_write(Context_t* ctx, const uint8_t* data, size_t len)
+static size_t lwsapi_write(Context_t* ctx, const uint8_t* data, size_t len)
 {
 	if (ctx == nullptr)
 	{
-		lwsgi_error("lwsgi_write: Bad input!\n");
+		lwsapi_error("lwsapi_write: Bad input!\n");
 		return 0;
 	}
 
@@ -320,7 +369,7 @@ size_t lwsgi_write(Context_t* ctx, const uint8_t* data, size_t len)
 			offset += snd_len;
 			return offset;
 		} else {
-			lwsgi_dbg("[%p] lwsgi_write: tcp_write error: %d\n", ctx->pcb, err);
+			lwsapi_dbg("[%p] lwsapi_write: tcp_write error: %d\n", ctx->pcb, err);
 			return offset;
 		}
 	}
@@ -329,7 +378,7 @@ size_t lwsgi_write(Context_t* ctx, const uint8_t* data, size_t len)
 }
 
 
-static err_t lwsgi_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
+static err_t lwsapi_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 {
 	if ((err != ERR_OK) || (p == nullptr) || (arg == nullptr)) {
 		/* error or closed by other side? */
@@ -347,19 +396,19 @@ static err_t lwsgi_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t er
 	Context_t * ctx = static_cast<Context_t *>(arg);
 	ctx->input = p;
 	if (ctx->parse_request(p) != ERR_OK){
-		lwsgi_write(ctx, http_bad_request);
+		lwsapi_write(ctx, http_bad_request);
 		tcp_output(pcb);
 		return close_conn(pcb, ctx);
 	}
 	if (ctx->parse_headers(p) != ERR_OK){
-		lwsgi_write(ctx, http_bad_request);
+		lwsapi_write(ctx, http_bad_request);
 		tcp_output(pcb);
 		return close_conn(pcb, ctx);
 	}
 
 	ctx->coroutine = application(&ctx->env, &ctx->coroutine_arg);
 	pbuf_free(p);
-	lwsgi_call(ctx);		// first try to call coroutine
+	lwsapi_call(ctx);		// first try to call coroutine
 
 	return ERR_OK;
 
@@ -369,9 +418,10 @@ static err_t lwsgi_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t er
  * The pcb had an error and is already deallocated.
  * The argument might still be valid (if != nullptr).
  */
-static void lwsgi_err(void *arg, err_t err)
+static void lwsapi_err(void *arg, err_t err)
 {
-	lwsgi_error("lwsgi_err: (%d) %s\n", err, lwip_strerr(err));
+	// lwsapi_error("lwsapi_err: (%d) %s\n", err, lwip_strerr(err));
+	lwsapi_error("lwsapi_err: %d", err);
 
 	if (arg != nullptr) {
 		Context_t * ctx = static_cast<Context_t *>(arg);
@@ -383,7 +433,7 @@ static void lwsgi_err(void *arg, err_t err)
  * Data has been sent and acknowledged by the remote host.
  * This means that more data can be sent.
  */
-static err_t lwsgi_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
+static err_t lwsapi_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
 	if (arg == nullptr) {
 		return ERR_OK;
@@ -392,13 +442,13 @@ static err_t lwsgi_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 	Context_t * ctx = static_cast<Context_t *>(arg);
 	ctx->retries = 0;
 
-	lwsgi_call(ctx);
-	// lwsgi_send(pcb, env); todo: really ?
+	lwsapi_call(ctx);
+	// lwsapi_send(pcb, env); todo: really ?
 
 	return ERR_OK;
 }
 
-static err_t lwsgi_accept(void *arg, struct tcp_pcb *pcb, err_t err)
+static err_t lwsapi_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 {
 	if ((err != ERR_OK) || (pcb == nullptr)) {
 		return ERR_VAL;
@@ -407,21 +457,21 @@ static err_t lwsgi_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 	tcp_setprio(pcb, TCP_PRIO_MIN);
 	Context_t *ctx = new Context_t(pcb);
 	if (ctx == nullptr) {
-		lwsgi_error("lwsgi_accept: Out of memory, RST\n");
+		lwsapi_error("lwsapi_accept: Out of memory, RST\n");
 		return ERR_MEM;
 	}
 
 	/* Set up the various callback functions */
-	tcp_recv(pcb, lwsgi_recv);
-	tcp_err(pcb, lwsgi_err);
-	tcp_poll(pcb, lwsgi_poll, LIGHT_WSGI_POLL_INTERVAL);
-	tcp_sent(pcb, lwsgi_sent);
+	tcp_recv(pcb, lwsapi_recv);
+	tcp_err(pcb, lwsapi_err);
+	tcp_poll(pcb, lwsapi_poll, LIGHT_WSAPI_POLL_INTERVAL);
+	tcp_sent(pcb, lwsapi_sent);
 
 	return ERR_OK;
 }
 
-err_t lwsgi_init(void){
-	lwsgi_dbg("lwsgi: start\n");
+err_t lwsapi_init(void){
+	lwsapi_dbg("lwsapi: start\n");
 	struct tcp_pcb *pcb;
 	err_t err;
 
@@ -431,18 +481,18 @@ err_t lwsgi_init(void){
 	}
 
 	tcp_setprio(pcb, TCP_PRIO_MIN);
-	err = tcp_bind(pcb, IP_ANY_TYPE, LIGHT_WSGI_PORT);
+	err = tcp_bind(pcb, IP_ANY_TYPE, LIGHT_WSAPI_PORT);
 	if (err != ERR_OK){
-		lwsgi_error("lwsgi: tcp_bind failed: %d", err);
+		lwsapi_error("lwsapi: tcp_bind failed: %d", err);
 		return err;
 	}
 
 	pcb = tcp_listen(pcb);
 	if (pcb == nullptr){
-		lwsgi_error("lwsgi: tcp_listen failed");
+		lwsapi_error("lwsapi: tcp_listen failed");
 		return ERR_CLSD;
 	}
 
-	tcp_accept(pcb, lwsgi_accept);
+	tcp_accept(pcb, lwsapi_accept);
 	return ERR_OK;
 }
