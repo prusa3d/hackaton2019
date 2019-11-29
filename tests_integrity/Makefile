@@ -1,14 +1,19 @@
-CFLAGS := -g $(shell pkg-config --cflags lwip) -I./ -Wall -Wmaybe-uninitialized
+RFC1123_DATETIME := $(shell LC_ALL=C TZ='GMT' date +'"%a, %d %b %Y %T GMT"')
+CFLAGS := -g $(shell pkg-config --cflags lwip) -I./ -Wall -Wmaybe-uninitialized \
+	-D RFC1123_DATETIME='$(RFC1123_DATETIME)'
 CXXFLAGS := $(CFLAGS) -fpermissive
 LDFLAGS := $(shell pkg-config --libs lwip) -pthread
 
-all: lwsgi
+all: lwsapi
 
-lwsgi: main.o lwsgi.o http_states.o connect.o
-	$(CXX) main.o lwsgi.o http_states.o connect.o -o lwsgi $(LDFLAGS)
+lwsapi: main.o lwsapi.o http_states.o connect.o
+	$(CXX) main.o lwsapi.o http_states.o connect.o -o lwsapi $(LDFLAGS)
+
+hello_world: main.o lwsapi.o hello_world.o
+	$(CXX) main.o lwsapi.o hello_world.o -o hello_world $(LDFLAGS)
 
 clean:
-	$(RM) -f *.o lwsgi
+	$(RM) -f *.o lwsapi
 
 info:
 	@echo $(CFLAGS)

@@ -1,8 +1,14 @@
-#include "lwsgi.h"
+#include "lwsapi.h"
 #include "http_states.h"
 #include <cstring>
 
 #include "../Marlin/src/module/temperature.h"
+
+#ifdef RFC1123_DATETIME
+	#define LAST_MODIFY RFC1123_DATETIME
+#else
+	#define LAST_MODIFY __TIMESTAMP__
+#endif
 
 #include "Res/cc/index_html.c"
 #include "Res/cc/index_css.c"
@@ -46,59 +52,62 @@ const FileHandler_t files[] = {
 };
 
 enum State_t {
-	RESPONSE,
-	HEADERS,
-	DATA,
+	FIRST,
+	NEXT,
 	DONE
 };
 
 struct FileResponse_t {
 
-	char http_state[50];   // longest response is 444 (47 chars)
-	char h_buffer[128];
+	const char* response;
+	char clength[11];		// 2^32+1
+	Header_t headers[4];
 	const FileHandler_t* handler;
-	State_t state = RESPONSE;
+	bool done;
+	static constexpr const char* last_modified = LAST_MODIFY;
 
-	FileResponse_t(const FileHandler_t* handler):handler(handler)
+	FileResponse_t(const FileHandler_t* handler):
+			response(HTTP_200), handler(handler), done(false)
 	{
-		snprintf(http_state, 50, "%s %s\r\n", HTTP_10, HTTP_200);
-		snprintf(
-			h_buffer, 128,
-			"Content-Type: %s\r\n"
-			"Content-Length: %d\r\n"
-			"\r\n", handler->content_type, handler->content_length);
+		snprintf(clength, 11, "%d", handler->content_length);
+
+		headers[0] = (Header_t){"Content-Type", handler->content_type,
+				&headers[1]};
+		headers[1] = (Header_t){"Content-Length", clength, &headers[2]};
+		headers[2] = (Header_t){"Last-Modify", last_modified, &headers[3]};
+		headers[3] = (Header_t){"Cache-Control", "public, max-age=31536000",
+				nullptr};
 	}
+
+	~FileResponse_t()
+	{}
 };
 
 struct BufferResponse_t {
+	const char* response = nullptr;
+	Header_t* headers = nullptr;
 	char buffer[256] = {'\0'};
-	State_t state = RESPONSE;
+	bool done = false;
+
+	~BufferResponse_t()
+	{
+		free(headers);
+	}
 };
 
 Message_t file_coroutine(void* arg)
 {
-	Message_t msg = {nullptr, EOF};
+	Message_t msg = {nullptr, nullptr, nullptr, EOF};
 
-	if (arg != nullptr){
+	if (arg != nullptr)
+	{
 		FileResponse_t* res = (FileResponse_t*)arg;
-		switch (res->state)
-		{
-			case RESPONSE:
-				msg = {(const uint8_t*)res->http_state,
-						(int)strlen(res->http_state)};
-				res->state = State_t::HEADERS;
-				break;
-			case HEADERS:
-				msg = {(const uint8_t*)res->h_buffer,
-						(int)strlen(res->h_buffer)};
-				res->state = State_t::DATA;
-				break;
-			case DATA:
-				msg = {res->handler->data, res->handler->content_length};
-				res->state = State_t::DONE;
-				break;
-			case DONE:
-				delete res;		// clean up
+		if (res->done){
+			delete res;
+		} else {
+			msg = {res->response, res->headers, res->handler->data,
+					res->handler->content_length};
+			res->done = true;
 		}
 	}
 	return msg;
@@ -107,22 +116,17 @@ Message_t file_coroutine(void* arg)
 Message_t buffer_coroutine(void* arg)
 {
 	//const char* dummny = "This is dummy data. ";
-	Message_t msg = {nullptr, EOF};
+	Message_t msg = {nullptr, nullptr, nullptr, EOF};
 
-	if (arg != nullptr){
+	if (arg != nullptr)
+	{
 		BufferResponse_t* res = (BufferResponse_t*)arg;
-		switch (res->state)
-		{
-			case RESPONSE:
-			case HEADERS:
-			case DATA:
-				msg ={(const uint8_t*)res->buffer,
-						(int)strlen(res->buffer)};
-				res->state = State_t::DONE;
-				break;
-			case DONE:
-				//msg = {(const uint8_t*)dummny, (int)strlen(dummny)};
-				delete res;		// clean up
+		if (res->done){
+			delete res;
+		} else {
+			msg = {res->response, res->headers,(const uint8_t*)res->buffer,
+					(int)strlen(res->buffer)};
+			res->done = true;
 		}
 	}
 	return msg;
@@ -133,13 +137,11 @@ coroutine_fn api_job(Environment_t* env, void** arg)
 	BufferResponse_t* res = new BufferResponse_t();
 	*arg = res;
 
-	snprintf(
-		res->buffer, 256,
-		"%s %s\r\n"
-		"Content-Type: application/json\r\n"
-		"\r\n"
-		"{}", HTTP_10, HTTP_200);
+	res->response = HTTP_200;
+	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
+	*res->headers = {"Content-Type", "application/json", nullptr};
 
+	snprintf(res->buffer, 256, "{}");
 	return &buffer_coroutine;
 }
 
@@ -149,20 +151,26 @@ coroutine_fn api_printer(Environment_t* env, void** arg)
 	BufferResponse_t *res = new BufferResponse_t();
 	*arg = res;
 
+	res->response = HTTP_200;
+	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
+	*res->headers = {"Content-Type", "application/json", nullptr};
+
+	#if 1
 	float actual_nozzle = thermalManager.degHotend(0);
 	float target_nozzle = thermalManager.degTargetHotend(0);
 	float actual_heatbed = thermalManager.degBed();
 	float target_heatbed = thermalManager.degTargetBed();
+	#else
+	float actual_nozzle = 26;
+	float target_nozzle = 32;
+	float actual_heatbed = 55;
+	float target_heatbed = 16;
+	#endif
 
-	snprintf(
-		res->buffer, 256,
-		"%s %s\r\n"
-		"Content-Type: application/json\r\n"
-		"\r\n"
+	snprintf(res->buffer, 256,
 		"{\"temperature\":{"
 			"\"tool0\":{\"actual\":%f, \"target\":%f},"
 			"\"bed\":{\"actual\":%f, \"target\":%f}}}",
-		HTTP_10, HTTP_200,
 		(double)actual_nozzle, (double)target_nozzle,
 		(double)actual_heatbed, (double)target_heatbed);
 
@@ -174,22 +182,22 @@ coroutine_fn not_found(Environment_t* env, void** arg)
 	BufferResponse_t *res = new BufferResponse_t();
 	*arg = res;
 
-	snprintf(
-		res->buffer, 256,
-		"%s %s\r\n"
-		"Content-Type: text/plain\r\n"
-		"\r\n"
-		"Not Found", HTTP_10, HTTP_404);
+	res->response = HTTP_404;
+	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
+	*res->headers = {"Content-Type", "text/plain", nullptr};
+
+	snprintf(res->buffer, 256, "Not Found");
 
 	return &buffer_coroutine;
 }
 
 
 coroutine_fn application(Environment_t * env, void** arg){
-	/*
-	char header[64] = {'\0'};
 
 	printf("HTTP Request: %s %s\n", env->method, env->request_uri);
+
+	/*
+	char header[64] = {'\0'};
 
 	auto it = env->headers;
 	while (it){
@@ -197,6 +205,7 @@ coroutine_fn application(Environment_t * env, void** arg){
 		it = it->next;
 	}
 	*/
+
 
 	// Static files
 	for (size_t i=0; i<(sizeof(files)/sizeof(FileHandler_t)); i++)

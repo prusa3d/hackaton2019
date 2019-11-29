@@ -463,5 +463,5 @@ Src/usbh_conf.c
 Src/usbh_diskio.c
 startup/startup_stm32f407xx.s
 Wui/connect.cpp
-Wui/lwsgi.cpp
 Wui/http_states.c
+Wui/lwsapi.cpp
