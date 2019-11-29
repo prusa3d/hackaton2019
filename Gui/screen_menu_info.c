@@ -4,6 +4,7 @@
 #include "screen_menu.h"
 
 extern screen_t screen_sysinfo;
+extern screen_t screen_logging;
 extern screen_t screen_version_info;
 
 typedef enum {
@@ -16,6 +17,7 @@ typedef enum {
     MI_FAIL_STAT,
     MI_SUPPORT,
 #endif //_DEBUG
+	MI_LOGGING,
     MI_VERSIONS
 } MI_t;
 
@@ -23,22 +25,13 @@ const menu_item_t _menu_info_items[] = {
 #ifdef _DEBUG
     { { "Statistic", 0, WI_LABEL | WI_DISABLED }, SCREEN_MENU_NO_SCREEN },
 #endif //_DEBUG
-    { {
-          "System Info",
-          0,
-          WI_LABEL,
-      },
-        &screen_sysinfo },
+    { { "System Info", 0, WI_LABEL, }, &screen_sysinfo },
 #ifdef _DEBUG
     { { "Fail Stats", 0, WI_LABEL | WI_DISABLED }, SCREEN_MENU_NO_SCREEN },
     { { "Support", 0, WI_LABEL | WI_DISABLED }, SCREEN_MENU_NO_SCREEN },
 #endif //_DEBUG
-    { {
-          "Version Info",
-          0,
-          WI_LABEL,
-      },
-        &screen_version_info },
+	{ { "Logging", 0, WI_LABEL, }, &screen_logging },
+    { { "Version Info", 0, WI_LABEL, }, &screen_version_info },
 };
 
 void screen_menu_info_init(screen_t* screen)

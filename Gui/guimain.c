@@ -50,6 +50,7 @@ extern screen_t* pscreen_sysinfo;
 extern screen_t* pscreen_version_info;
 extern screen_t* pscreen_test_disp_mem;
 extern screen_t* pscreen_messages;
+extern screen_t* pscreen_logging;
 #ifdef PIDCALIBRATION
 extern screen_t* pscreen_PID;
 #endif //PIDCALIBRATION
@@ -167,6 +168,7 @@ void gui_run(void)
     screen_register(pscreen_mesh_bed_lv);
     screen_register(pscreen_wizard);
     screen_register(pscreen_print_preview);
+    screen_register(pscreen_logging);
 #endif // LCDSIM
 
 #ifndef _DEBUG
