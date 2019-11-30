@@ -130,20 +130,17 @@ void app_run(void)
             DBG("Z:%li", z);
         }
 #endif //SIM_MOTION_TRACE_Z
+        stall = get_tmc_stall_extruder();
 
-        if (++counter % 10 == 0) {
+        //if (++counter % 100 == 0) {
 
-            stall = get_tmc_stall_extruder();
+        if (stall != prevStall) {
 
-            if (stall != prevStall) {
+            DBG("StallGuard %d", stall);
 
-                DBG("StallGuard %d", stall);
-
-                prevStall = stall;
-            }
+            prevStall = stall;
         }
-
-        DBG("StallGuard %d", stall);
+        //}
     }
 }
 
