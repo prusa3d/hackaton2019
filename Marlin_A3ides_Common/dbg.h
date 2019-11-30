@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include "config.h"
 #include "config_a3ides2209_02.h"
+#include "logger.h"
 
 
 #ifndef DBG_LEVEL
@@ -49,12 +50,13 @@ extern void _dbg_swo(const char* fmt, ...);
 extern void _dbg_uart(const char* fmt, ...);
 #define _dbg _dbg_uart
 #elif defined(DBG_CDC)     // trace to CDC
-extern void _dbg_cdc(const char* fmt, ...);
-#define _dbg _dbg_cdc
+extern void _dbg_cdc(const char* fmt, ...); //extern void _dbg_cdc(const char* fmt, ...);
+#define _dbg _dbg_cdc  						//#define _dbg _dbg_cdc
 #else                      // trace disabled
 #define _dbg(...)
 #endif //
 
+void _new_dbg(log_level_t level, log_module_t module, uint32_t code, const char* fmt, ...);
 
 extern uint32_t _microseconds(void);
 

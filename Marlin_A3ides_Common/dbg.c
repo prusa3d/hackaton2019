@@ -3,6 +3,7 @@
 #include "dbg.h"
 #include <stdarg.h>
 #include "stm32f4xx_hal.h"
+#include "log_file.h"
 
 #define DBG_MAXLINE 128
 
@@ -91,6 +92,28 @@ void _dbg_uart(const char* fmt, ...)
 #elif defined(DBG_CDC)
 
 #include "usbd_cdc_if.h"
+
+void _new_dbg(log_level_t level, log_module_t module, uint32_t code, const char* fmt, ...)
+{
+    log_message_t msg;
+	char json[MAX_JSON_LEN];
+	uint32_t json_len;
+
+	msg.timestamp = HAL_GetTick();
+	msg.level = level;
+	msg.module = module;
+	msg.code = code;
+
+	va_list va;
+	va_start(va, fmt);
+	msg.message_length = vsprintf(msg.message, fmt, va);
+	va_end(va);
+	msg.message[msg.message_length] = 0;
+
+	/* TODO: Replace by write to SPI flash */
+	log_msg_to_json(&msg, json, &json_len);
+	_dbg(json);
+}
 
 void _dbg_cdc(const char* fmt, ...)
 {
