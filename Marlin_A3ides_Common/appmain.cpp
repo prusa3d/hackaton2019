@@ -131,12 +131,12 @@ void app_run(void)
         }
 #endif //SIM_MOTION_TRACE_Z
         stall = get_tmc_stall_extruder();
-
+        
         //if (++counter % 100 == 0) {
 
-        if (stall != prevStall) {
+        if (stall != prevStall && stall >= 4) {
 
-            DBG("StallGuard %d", stall);
+            DBG("STALL: %d", stall);
 
             prevStall = stall;
         }
