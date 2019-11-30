@@ -35,32 +35,24 @@ typedef enum
 
 #pragma pack(push, 1)
 
-typedef struct
-{
-	uint16_t	logger_version;		//value 0xFFFF is reserved for empty page
-	uint16_t	page_number;
-	//TODO add CRC
-} log_page_header_t;
-
-typedef struct
+typedef struct		//size of this structure shall be integer fraction of PAGE_SIZE defined in logger.c
 {
 	uint32_t	timestamp;		//cannot be 0xFFFFFFFF
 	uint8_t		level;
 	uint16_t	module;
 	uint32_t	code;
-	uint8_t		message_length;
-	char		message[128];
+	char		message[117];	//round structure to 128 bytes
 } log_message_t;
 
 #pragma pack(pop)
 
 
-void log_message( log_context_t context, log_level_t level, log_module_t module, uint32_t code, const char* message );
+void log_message( log_level_t level, log_module_t module, uint32_t code, const char* message );
 
 void test_logger();
 
 void init_logger_reading();
-uint32_t get_next_logged_message( uint32_t*	pTimestamp, log_level_t* pLevel, log_module_t* pModule, uint32_t* pCode, char* pMessage );
+uint32_t get_next_logged_message( uint32_t*	pTimestamp, log_level_t* pLevel, log_module_t* pModule, uint32_t* pCode, char* pMessage, uint32_t messegeBufferSize );
 
 
 #ifdef __cplusplus

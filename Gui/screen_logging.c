@@ -42,7 +42,7 @@ enum { col_2_w = 38 };
 enum {
     TAG_QUIT = 10,
 	TAG_SAVE = 20,
-	TAG_ERRASE = 30
+	TAG_ERASE = 30
 
 };
 
@@ -67,9 +67,9 @@ void screen_logging_init(screen_t* screen)
 
     id = window_create_ptr(WINDOW_CLS_TEXT, id0, rect_ui16(col_0, 65, 120, 22), &(pda->textErrase));
     pda->textExit.font = resource_font(IDR_FNT_BIG);
-    window_set_text(id, (const char*)"ERRASE LOG");
+    window_set_text(id, (const char*)"ERASE LOG");
     window_enable(id);
-    window_set_tag(id, TAG_ERRASE);
+    window_set_tag(id, TAG_ERASE);
 
     id = window_create_ptr(WINDOW_CLS_TEXT, id0, rect_ui16(col_0, 290, 60, 22), &(pda->textExit));
     pda->textExit.font = resource_font(IDR_FNT_BIG);
@@ -110,15 +110,15 @@ int screen_logging_event(screen_t* screen, window_t* window, uint8_t event, void
         case TAG_SAVE:
         	ret = f_open(&logFile, (const TCHAR*)"log1.txt", FA_CREATE_NEW | FA_WRITE | FA_READ);
 
-        	next_message = get_next_logged_message(&message.timestamp, &message.level, &message.module, &message.code, &message.message);
-        	if (next_message)
+        	init_logger_reading();
+        	next_message = get_next_logged_message(&message.timestamp, &message.level, &message.module, &message.code, &message.message, 117);
+        	while (next_message == 1)
         	{
-        		// while () {
-        		message.message_length = strlen(message.message);
         		log_msg_to_json(&message, json, &json_len);
 
         		if (ret == FR_OK) ret = f_write(&logFile, json, json_len, (void*)&wb);
         		if (ret != FR_OK) _dbg(json);
+        		next_message = get_next_logged_message(&message.timestamp, &message.level, &message.module, &message.code, &message.message, 117);
         	}
 
         	ret = f_sync(&logFile);
@@ -134,8 +134,9 @@ int screen_logging_event(screen_t* screen, window_t* window, uint8_t event, void
 			}
             return 1;
 
-        case TAG_ERRASE:
-        	//test_logger();
+        case TAG_ERASE:
+            //test_logger();
+            //init_logger();
         	_new_dbg(LOGLEVEL_DEBUG, LOGMODULE_GUI, 1002, "Erase log memory.");
             return 1;
         }

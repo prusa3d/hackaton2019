@@ -98,6 +98,7 @@ void _new_dbg(log_level_t level, log_module_t module, uint32_t code, const char*
 {
     log_message_t msg;
 	char json[MAX_JSON_LEN];
+	uint32_t msg_len;
 	uint32_t json_len;
 
 	msg.timestamp = HAL_GetTick();
@@ -107,15 +108,15 @@ void _new_dbg(log_level_t level, log_module_t module, uint32_t code, const char*
 
 	va_list va;
 	va_start(va, fmt);
-	msg.message_length = vsprintf(msg.message, fmt, va);
+	msg_len = vsprintf(msg.message, fmt, va);
 	va_end(va);
-	msg.message[msg.message_length] = 0;
+	msg.message[msg_len] = 0;
 
 	/* TODO: Replace by write to SPI flash */
 	log_msg_to_json(&msg, json, &json_len);
 	_dbg(json);
 
-	//log_message(LOGCONTEXT_TimeCritical, level, module, code, msg.message);
+	log_message(level, module, code, msg.message);
 }
 
 void _dbg_cdc(const char* fmt, ...)

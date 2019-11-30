@@ -10,119 +10,57 @@
 #define EMPTY_MESSAGE_MARKER		0xFFFFFFFF
 
 static char s_logger_is_initialized;
-static uint32_t s_active_page_address;
-static uint32_t s_active_page_number;
-static uint32_t s_active_page_init_needed = 0;
-static uint32_t s_next_record_address;
+static uint32_t s_next_free_record = 0;
 
+static uint32_t s_first_reading_record_address;
 static uint32_t s_reading_record_address;
 static uint32_t s_reading_eof = 0;
 
-void init_page(uint32_t page_address)
+void init_logger()
 {
+	if ( s_logger_is_initialized )
+	{
+		return;
+	}
 
-}
-
-int8_t init_logger()
-{
 	//TODO check whether HAL is already initialized
 	int8_t result = w25x_init();
 	w25x_wait_busy();
 
-	log_page_header_t page_header;
-
 	uint32_t flash_addr = FLASH_MEMORY_START;
-	uint32_t latest_page_address = flash_addr;
-	uint32_t latest_page_number = EMPTY_PAGE_MARKER;
+	uint32_t timestamp;
 
-	while (flash_addr < (FLASH_MEMORY_START + FLASH_MEMORY_SIZE)) {
-		w25x_rd_data(flash_addr, &page_header, sizeof(log_page_header_t));
+	while (flash_addr < (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+	{
+		w25x_rd_data(flash_addr, &timestamp, sizeof(timestamp));
 		//TODO check return value
 
-		if (page_header.logger_version == EMPTY_PAGE_MARKER) {
-			s_active_page_init_needed = 1;
+		if (timestamp == EMPTY_MESSAGE_MARKER)
+		{
 			break;
 		}
 
-		if (page_header.page_number < latest_page_number) {
-			break;
-		}
-
-		latest_page_address = flash_addr;
-		latest_page_number = page_header.page_number;
-
-		flash_addr += PAGE_SIZE;
+		flash_addr += sizeof(log_message_t);
 	}
 
-	s_active_page_address = latest_page_address;
-
-	//find first empty space
-	if (latest_page_number == EMPTY_PAGE_MARKER) {
-		s_next_record_address = latest_page_address + sizeof(log_page_header_t);
-	} else {
-		flash_addr = latest_page_address;
-		log_message_t log_message;
-
-		while (flash_addr < (latest_page_address + PAGE_SIZE)) {
-			w25x_rd_data(flash_addr, &log_message, sizeof(log_message));
-			//TODO check return value
-
-			if (log_message.timestamp == EMPTY_MESSAGE_MARKER) {
-				break;
-			}
-
-			flash_addr += sizeof(log_message);
-		}
-
-		s_next_record_address = flash_addr;
+	if (flash_addr >= (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+	{
+		flash_addr = FLASH_MEMORY_START;
 	}
 
+	s_next_free_record = flash_addr;
 	s_logger_is_initialized = 1;
 }
 
-void log_message(log_context_t context, log_level_t level, log_module_t module, uint32_t code, const char* message)
+void log_message(log_level_t level, log_module_t module, uint32_t code, const char* message)
 {
+	//init logger if not initialized
 	if (0 == s_logger_is_initialized) {
-		if (!init_logger()) {
-			return;	//logger is probably called too early
-		}
+		init_logger();
 	}
 
-	//check whether there is enough room in actual page
-	if (s_next_record_address + sizeof(log_message_t)
-			> (s_active_page_address + PAGE_SIZE)) {
-		//page is full, use new page
-		s_active_page_address += PAGE_SIZE;
-		s_active_page_number++;
-		if (s_active_page_address >= (FLASH_MEMORY_START + FLASH_MEMORY_SIZE)) {
-			s_active_page_address = FLASH_MEMORY_START;
-		}
-
-		s_next_record_address = s_active_page_address
-				+ sizeof(log_page_header_t);
-		s_active_page_init_needed = 1;
-	}
-
-	if (s_active_page_init_needed) {
-		//erase page
-		w25x_enable_wr();
-		w25x_sector_erase(s_active_page_address);
-		w25x_wait_busy();
-
-		//prepare and save new page header
-		log_page_header_t page_header;
-		page_header.page_number = s_active_page_number;
-		page_header.logger_version = LOGGER_VERSION;
-		w25x_enable_wr();
-		w25x_page_program(s_active_page_address, &page_header, sizeof(log_page_header_t));
-		w25x_wait_busy();
-
-		s_active_page_init_needed = 0;
-	}
-
-	//save new message
+	//save new record
 	log_message_t message_record;
-
 	uint32_t timestamp = HAL_GetTick();
 	if (timestamp == EMPTY_PAGE_MARKER)
 		timestamp++;
@@ -130,68 +68,102 @@ void log_message(log_context_t context, log_level_t level, log_module_t module, 
 	message_record.level = (uint8_t) level;
 	message_record.module = module;
 	message_record.code = code;
-	message_record.message_length = 0;
+	strncpy(message_record.message, message, sizeof(message_record.message));
 
 	w25x_enable_wr();
-	w25x_page_program(s_next_record_address, &message_record, sizeof(log_message_t));
+	w25x_page_program(s_next_free_record, &message_record, sizeof(log_message_t));
 	w25x_wait_busy();
 
-	s_next_record_address += sizeof(log_message_t);
+	//assure that there is enough free room for next record
+	uint32_t page_address_1 = (s_next_free_record / PAGE_SIZE) * PAGE_SIZE;
+	uint32_t page_address_2 = ((s_next_free_record + sizeof(log_message_t)) / PAGE_SIZE) * PAGE_SIZE;
+
+	s_next_free_record += sizeof(log_message_t);
+
+
+	if(page_address_2 > page_address_1)
+	{
+		//roll over memory space if necessary
+		if(page_address_2 >= (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+		{
+			page_address_2 = FLASH_MEMORY_START;
+			s_next_free_record = FLASH_MEMORY_START;
+		}
+
+		//clear page after this record
+		w25x_enable_wr();
+		w25x_sector_erase(page_address_2);
+		w25x_wait_busy();
+	}
 
 }
 
 void init_logger_reading()
 {
-	//find first free page or oldest page
-	log_page_header_t page_header;
-
-	uint32_t flash_addr = FLASH_MEMORY_START;
-	uint32_t first_page_address = 0;
-	uint32_t first_page_number = 0;
-	uint32_t eof = 1;
-
-	while (flash_addr < (FLASH_MEMORY_START + FLASH_MEMORY_SIZE)) {
-		w25x_rd_data(flash_addr, &page_header, sizeof(log_page_header_t));
-		//TODO check return value
-
-		if ( flash_addr ==  FLASH_MEMORY_START )
-		{
-			first_page_address = 0;
-		    first_page_number = page_header.page_number;
-		}
-
-		if (page_header.logger_version == EMPTY_PAGE_MARKER) {
-			break;
-		}
-
-		if (page_header.page_number < first_page_number) {
-			first_page_address = flash_addr;
-		    first_page_number = page_header.page_number;
-			break;
-		}
-
-		flash_addr += PAGE_SIZE;
+	if (0 == s_logger_is_initialized) {
+		init_logger();
 	}
 
-	s_reading_record_address = first_page_address + sizeof(page_header);
+	uint32_t flash_addr = FLASH_MEMORY_START;
+	uint32_t timestamp;
 
+	while (flash_addr < (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+	{
+		w25x_rd_data(flash_addr, &timestamp, sizeof(timestamp));
+		//TODO check return value
 
+		if (timestamp == EMPTY_MESSAGE_MARKER)
+		{
+			break;
+		}
+
+		flash_addr += sizeof(log_message_t);
+	}
+
+	if (flash_addr >= (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+	{
+		flash_addr = 0;
+	}
+	else
+	{
+		while (flash_addr < (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+		{
+			w25x_rd_data(flash_addr, &timestamp, sizeof(timestamp));
+			//TODO check return value
+
+			if (timestamp != EMPTY_MESSAGE_MARKER)
+			{
+				break;
+			}
+
+			flash_addr += sizeof(log_message_t);
+		}
+
+	}
+
+	s_first_reading_record_address = flash_addr;
+	s_reading_record_address = flash_addr;
 }
 
-uint32_t get_next_logged_message( uint32_t*	pTimestamp, log_level_t* pLevel, log_module_t* pModule, uint32_t* pCode, char* pMessage )
+uint32_t get_next_logged_message( uint32_t*	pTimestamp, log_level_t* pLevel, log_module_t* pModule, uint32_t* pCode, char* pMessage, uint32_t messegeBufferSize )
 {
+	if (0 == s_logger_is_initialized) {
+		init_logger();
+	}
+
 	if ( s_reading_eof )
 	{
 		return 0;
 	}
 
+	//read message
 	log_message_t log_message;
-
 	w25x_rd_data(s_reading_record_address, &log_message, sizeof(log_message));
 
+	//detect first empty message
 	if (log_message.timestamp == EMPTY_MESSAGE_MARKER)
 	{
-		s_reading_eof = 0;
+		s_reading_eof = 1;
 		return 0;
 	}
 
@@ -199,18 +171,58 @@ uint32_t get_next_logged_message( uint32_t*	pTimestamp, log_level_t* pLevel, log
 	*pLevel = log_message.level;
 	*pModule = log_message.module;
 	*pCode = log_message.code;
-
-	uint32_t page_start = (s_reading_record_address / PAGE_SIZE) * PAGE_SIZE;
-	//TODO jump over page end
-
-	//TODO detect last page
+	strncpy(pMessage, log_message.message, messegeBufferSize);
 
 	s_reading_record_address += sizeof(log_message);
+
+	if (s_reading_record_address >= (FLASH_MEMORY_START + FLASH_MEMORY_SIZE))
+	{
+		s_reading_record_address = FLASH_MEMORY_START;
+	}
 
 	return 1;
 }
 
 static tested = 0;
+
+void assert( uint32_t arg)
+{
+	if(!arg)
+	{
+		for(;;);
+	}
+}
+
+void read_and_test_message( log_level_t expectedLevel, log_module_t expectedModule, uint32_t expectedCode, char* expectedMessage  )
+{
+	uint32_t timestamp;
+	log_level_t level;
+	log_module_t module;
+	uint32_t code;
+	char message[128];
+
+	uint32_t result = get_next_logged_message( &timestamp, &level, &module, &code, message, sizeof(message) );
+
+	assert( result == 1 );
+	assert( level == expectedLevel );
+	assert( module == expectedModule );
+	assert( code == expectedCode );
+	assert( strncmp(message, expectedMessage, sizeof(message) ) == 0);
+}
+
+
+void read_and_test_eof_message( )
+{
+	uint32_t timestamp;
+	log_level_t level;
+	log_module_t module;
+	uint32_t code;
+	char* message[128];
+
+	uint32_t result = get_next_logged_message( &timestamp, &level, &module, &code, &message, sizeof(message) );
+
+	assert( result == 0 );
+}
 
 void test_logger() {
 	if (tested)
@@ -219,32 +231,35 @@ void test_logger() {
 	}
 	tested = 1;
 
-	init_logger();
-
+	w25x_init();
+	w25x_enable_wr();
 	w25x_chip_erase();
+	w25x_wait_busy();
 
-	log_message( LOGCONTEXT_DelayTolerant, LOGLEVEL_INFO, LOGMODULE_FreeRTOS, 0, "Idle" );
+	uint32_t codeCounter = 0;
+	for(int i = 0; i < 33; i++)		//one page is 32 resords
+	{
+		log_message( LOGLEVEL_INFO, LOGMODULE_FreeRTOS, codeCounter++, "Idle" );
+		log_message( LOGLEVEL_DEBUG, LOGMODULE_Marlin, codeCounter++, "Marlin run" );
+		log_message( LOGLEVEL_WARNING, LOGMODULE_GUI, codeCounter++, "Refresh" );
+		log_message( LOGLEVEL_ERROR, LOGMODULE_GUI, codeCounter++, "Dialog" );
+	}
 
 	init_logger_reading();
 
+	codeCounter = 0;
+	for(int i = 0; i < 33; i++)		//one page is 32 resords
+	{
+		read_and_test_message( LOGLEVEL_INFO, LOGMODULE_FreeRTOS, codeCounter++, "Idle" );
+		read_and_test_message( LOGLEVEL_DEBUG, LOGMODULE_Marlin, codeCounter++, "Marlin run" );
+		read_and_test_message( LOGLEVEL_WARNING, LOGMODULE_GUI, codeCounter++, "Refresh" );
+		read_and_test_message( LOGLEVEL_ERROR, LOGMODULE_GUI, codeCounter++, "Dialog" );
+	}
+	read_and_test_eof_message();
 
-	uint32_t timestamp;
-	log_level_t level;
-	log_module_t module;
-	uint32_t code;
-	char  message[8];
-
-	uint32_t result = get_next_logged_message( &timestamp, &level, &module, &code, &message );
-
-	result = get_next_logged_message( &timestamp, &level, &module, &code, &message );
-
-	//	check_flash();
-//	log_message( LOGCONTEXT_DelayTolerant, LOGLEVEL_INFO, LOGMODULE_FreeRTOS, 1, "Idle" );
-//	check_flash();
-//	log_message( LOGCONTEXT_DelayTolerant, LOGLEVEL_INFO, LOGMODULE_FreeRTOS, 2, "Idle" );
-//	check_flash();
-
-//	int8_t init_logger();
+	w25x_enable_wr();
+	w25x_chip_erase();
+	w25x_wait_busy();
 
 }
 
