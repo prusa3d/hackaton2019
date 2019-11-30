@@ -35,6 +35,7 @@ extern void USBSerial_put_rx_data(uint8_t* buffer, uint32_t length);
 extern "C" {
 
 extern void init_tmc(void);
+extern unsigned int get_tmc_stall_extruder(void);
 
 extern uartrxbuff_t uart6rxbuff; // PUT rx buffer
 extern uartslave_t uart6slave; // PUT slave
@@ -52,7 +53,7 @@ void app_setup(void)
     setup();
 
     init_tmc();
-    //DBG("after init_tmc (%ld ms)", HAL_GetTick());
+    DBG("after init_tmc (%ld ms)", HAL_GetTick());
 }
 
 void app_idle(void)
@@ -61,8 +62,10 @@ void app_idle(void)
 }
 
 bool canSampleStall = false;
-int stall = 0;
-int prevStall = 0;
+unsigned int stall = 0;
+unsigned int prevStall = 0;
+
+int counter = 0;
 
 void app_run(void)
 {
@@ -128,10 +131,19 @@ void app_run(void)
         }
 #endif //SIM_MOTION_TRACE_Z
 
-        if (stall != prevStall) {
-            DBG("StallGuard %d", stall);
-            prevStall = stall;
+        if (++counter % 10 == 0) {
+
+            stall = get_tmc_stall_extruder();
+
+            if (stall != prevStall) {
+
+                DBG("StallGuard %d", stall);
+
+                prevStall = stall;
+            }
         }
+
+        DBG("StallGuard %d", stall);
     }
 }
 
@@ -166,24 +178,18 @@ void app_tim6_tick(void)
 #endif //SIM_MOTION
 }
 
-int counter = 0;
-
 extern TMC2209Stepper stepperE0;
-
 
 void app_tim14_tick(void)
 {
     jogwheel_update_1ms();
     hwio_update_1ms();
 
-    if (canSampleStall && ++counter % 100 == 0) {
-    
-//        stall = stepperE0.SG_RESULT();
-    }
+    //if (canSampleStall && ++counter % 10 == 0) {
 
-    // f / 10
-    // flag can sample
-    // globalni promena
+    //    //stall = get_tmc_stall_extruder();
+    //    stall++;
+    //}
 }
 
 } // extern "C"
