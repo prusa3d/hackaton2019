@@ -283,12 +283,12 @@ coroutine_fn api_post(Environment_t* env, void** arg)
 	BufferResponse_t *res = new BufferResponse_t();
 	*arg = res;
 
-	res->response = HTTP_404;
+	res->response = HTTP_200;
 	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
 	*res->headers = {"Content-Type", "text/plain", nullptr};
 
-	//strncpy(res->buffer, env->body, 256);
-	snprintf(res->buffer, 256, "Not yet");
+	strncpy(res->buffer, env->body, 256);
+	//snprintf(res->buffer, 256, "Not yet");
 
 	return &buffer_coroutine;
 }

@@ -39,7 +39,7 @@ typedef struct _Environment_t {
 	char * method;				/**< HTTP METHOD (HEADER|GET|POST|PUT|etc..) */
 	char * request_uri;			/**< Full HTTP request uri */
 	Header_t * headers;			/**< List of request headers */
-	//char * body;
+	char * body;
 	// TODO: input callback which is call from tcp_pull to read full request
 } Environment_t;
 
