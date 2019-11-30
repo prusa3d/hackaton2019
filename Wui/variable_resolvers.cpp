@@ -58,6 +58,8 @@ const char* test_string()
 	return "testResult";
 }
 
+/********************/
+
 float actual_nozzle()
 {
 	return thermalManager.degHotend(0);

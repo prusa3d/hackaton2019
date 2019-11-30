@@ -3,6 +3,7 @@
 #include "dbg.h"
 
 #include "lwsapi.h"
+#include "../Common/marlin_client.h"
 
 #define LIGHT_WSAPI_PORT 80
 #define LIGHT_WSAPI_RETRIES 4              // 8 seconds timeout
@@ -35,12 +36,14 @@ struct Context_t {
 		env.method = nullptr;
 		env.request_uri = nullptr;
 		env.headers = nullptr;
+//		env.body = nullptr;
 	}
 
 	~Context_t()
 	{
 		/* Destructor for the Environment_t struct which is pure C. */
 		free(env.method);
+//		free(env.body);
 		free(env.request_uri);
 		Header_t* it = nullptr;
 		while (env.headers != nullptr){
@@ -58,6 +61,7 @@ struct Context_t {
 
 	err_t parse_request(struct pbuf *p);
 	err_t parse_headers(struct pbuf *p);
+//	err_t parse_body(struct pbuf *p);
 };
 
 
@@ -166,8 +170,52 @@ err_t Context_t::parse_headers(struct pbuf *p)
 	// TODO: set payload start position to end +1
 	return ERR_OK;
 }
+/*
+err_t Context_t::parse_body(struct pbuf *p)
+{
+	char *start = (char*)p->payload;
+	char *end = strchr(start, '\r');	// skip first line METHOD /URI HTTPX.Y
+	size_t len = end - start;
+	size_t readed = len;
+	start+=2;
+	while (strchr(start, '\r')!=0) {
+		end=strchr(end, '\r')+2;
+		len = end - start;
+		start = end;
+		readed += len;
+	}
 
+	env.body=new char();
+	int bodylength=0;
+	bool cont=true;
+	while (cont) {
+		end = strchr(start, '\n');
+		if(end==0){
+			end = strchr(start, '\0');
+			if(end==0){
+				len=strlen(start);
+			}else{
+				len = end - start;
+					}
+			cont=false;
+		}else{
+			len = end - start;
+		}
+		//   printf("String = %s,  Address = %u\n", str, str);
 
+		env.body = (char*)realloc(env.body,sizeof(char)*(bodylength+len+1));
+		memcpy(const_cast<char*>(env.body+bodylength), start, len);
+		bodylength+=len;
+		readed += len;
+		env.body[bodylength]='\0';
+
+		start = end+1;
+
+	}
+	// TODO: set payload start position to end +1
+	return ERR_OK;
+}
+*/
 static err_t lwsapi_poll(void *arg, struct tcp_pcb *pcb);
 
 const char * http_bad_request =
@@ -405,7 +453,11 @@ static err_t lwsapi_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t e
 		tcp_output(pcb);
 		return close_conn(pcb, ctx);
 	}
-
+/*	if (ctx->parse_body(p) != ERR_OK){
+		lwsapi_write(ctx, http_bad_request);
+		tcp_output(pcb);
+		return close_conn(pcb, ctx);
+	}*/
 	ctx->coroutine = application(&ctx->env, &ctx->coroutine_arg);
 	pbuf_free(p);
 	lwsapi_call(ctx);		// first try to call coroutine
@@ -492,6 +544,9 @@ err_t lwsapi_init(void){
 		lwsapi_error("lwsapi: tcp_listen failed");
 		return ERR_CLSD;
 	}
+
+	//TODO sem?
+	marlin_client_init();
 
 	tcp_accept(pcb, lwsapi_accept);
 	return ERR_OK;

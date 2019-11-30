@@ -96,7 +96,7 @@ struct BufferResponse_t {
 	}
 };
 
-struct JsonResponse_t {
+struct TemplateResponse_t {
 	const char* response = nullptr;
 	Header_t* headers = nullptr;
 	char buffer[256] = {'\0'};
@@ -105,7 +105,7 @@ struct JsonResponse_t {
 	char *segmentStart;
 	char *segmentEnd;
 
-	~JsonResponse_t()
+	~TemplateResponse_t()
 	{
 		free(headers);
 	}
@@ -149,14 +149,14 @@ Message_t buffer_coroutine(void* arg)
 	return msg;
 }
 
-Message_t json_coroutine(void* arg)
+Message_t template_coroutine(void* arg)
 {
 	//const char* dummny = "This is dummy data. ";
 	Message_t msg = {nullptr, nullptr, nullptr, EOF};
 
 	if (arg != nullptr)
 	{
-		JsonResponse_t* res = (JsonResponse_t*)arg;
+		TemplateResponse_t* res = (TemplateResponse_t*)arg;
 		if (res->done){
 			delete res;
 		} else {
@@ -260,7 +260,7 @@ coroutine_fn not_found(Environment_t* env, void** arg)
 
 coroutine_fn api_gif(Environment_t* env, void** arg)
 {
-	JsonResponse_t* res = new JsonResponse_t();
+	TemplateResponse_t* res = new TemplateResponse_t();
 	*arg = res;
 
 	res->response = HTTP_200;
@@ -275,10 +275,23 @@ coroutine_fn api_gif(Environment_t* env, void** arg)
 				"\"test\":\"$test_float+$test_int+$test_string+$TEMP_NOZ\"}";
 
 	//snprintf(res->buffer, 256, "{%s}", getVariableValue("actual_nozzle"));
-	return &json_coroutine;
+	return &template_coroutine;
 }
 
+coroutine_fn api_post(Environment_t* env, void** arg)
+{
+	BufferResponse_t *res = new BufferResponse_t();
+	*arg = res;
 
+	res->response = HTTP_404;
+	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
+	*res->headers = {"Content-Type", "text/plain", nullptr};
+
+	//strncpy(res->buffer, env->body, 256);
+	snprintf(res->buffer, 256, "Not yet");
+
+	return &buffer_coroutine;
+}
 
 coroutine_fn application(Environment_t * env, void** arg){
 
@@ -311,6 +324,8 @@ coroutine_fn application(Environment_t * env, void** arg){
 		return api_printer(env, arg);
 	} else if (!strcmp(env->request_uri, "/api/gif")) {
 		return api_gif(env, arg);
+	} else if (!strcmp(env->request_uri, "/api/post")) {
+		return api_post(env, arg);
 	}
 
 	return not_found(env, arg);

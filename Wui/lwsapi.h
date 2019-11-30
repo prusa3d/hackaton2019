@@ -1,5 +1,5 @@
 //! LwIP WSAPI C/C++ implementation.
-/** This is C/C++ implementation of Lua's WSAPI or prospal related to WSGI 2.0,
+/** This is C/C++ implementation of Lua's WSAPI or proposal related to WSGI 2.0,
     for LwIP stack, which is base on tcp callbacks. The interface is like
     Lua's WSAPI, but extend to context pointers, while C don't have coroutines,
     and LwIP could work on more systems, so context switching could not be
@@ -39,6 +39,7 @@ typedef struct _Environment_t {
 	char * method;				/**< HTTP METHOD (HEADER|GET|POST|PUT|etc..) */
 	char * request_uri;			/**< Full HTTP request uri */
 	Header_t * headers;			/**< List of request headers */
+	//char * body;
 	// TODO: input callback which is call from tcp_pull to read full request
 } Environment_t;
 
