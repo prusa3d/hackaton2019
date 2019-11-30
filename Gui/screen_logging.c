@@ -3,6 +3,7 @@
 #include "window_logo.h"
 #include "stm32f4xx_hal.h"
 
+#include "dbg.h"
 #include "sys.h"
 #include "../Middlewares/ST/Utilites/CPU/cpu_utils.h"
 
@@ -26,8 +27,8 @@ typedef struct
 /******************************************************************************************************/
 //variables
 
-static int actual_CPU_load = -1;
-static int last_CPU_load = -1;
+//static int actual_CPU_load = -1;
+//static int last_CPU_load = -1;
 
 /******************************************************************************************************/
 //methods
@@ -73,13 +74,13 @@ void screen_logging_init(screen_t* screen)
 
     row2draw += 25;
 
-    id = window_create_ptr(WINDOW_CLS_TEXT, id0, rect_ui16(col_0, 100, 180, 22), &(pd->textSave));
+    id = window_create_ptr(WINDOW_CLS_TEXT, id0, rect_ui16(col_0, 40, 150, 22), &(pd->textSave));
     pd->textExit.font = resource_font(IDR_FNT_BIG);
     window_set_text(id, (const char*)"SAVE TO FLASH");
     window_enable(id);
     window_set_tag(id, TAG_SAVE);
 
-    id = window_create_ptr(WINDOW_CLS_TEXT, id0, rect_ui16(col_0, 150, 180, 22), &(pd->textErrase));
+    id = window_create_ptr(WINDOW_CLS_TEXT, id0, rect_ui16(col_0, 65, 120, 22), &(pd->textErrase));
     pd->textExit.font = resource_font(IDR_FNT_BIG);
     window_set_text(id, (const char*)"ERRASE LOG");
     window_enable(id);
@@ -109,9 +110,11 @@ int screen_logging_event(screen_t* screen, window_t* window, uint8_t event, void
             screen_close();
             return 1;
         case TAG_SAVE:
+        	_dbg("Save Log");
             screen_close();
             return 1;
         case TAG_ERRASE:
+        	_dbg("Erase Log");
             screen_close();
             return 1;
         }

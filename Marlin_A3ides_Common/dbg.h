@@ -4,13 +4,12 @@
 
 #include <inttypes.h>
 #include "config.h"
+#include "config_a3ides2209_02.h"
 
 
 #ifndef DBG_LEVEL
 #define DBG_LEVEL 0
 #endif //DBG_LEVEL
-
-#define DBG_SWO
 
 
 #if (DBG_LEVEL >= 3)
