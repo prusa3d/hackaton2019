@@ -23,24 +23,21 @@
 #include "bsod.h"
 #include "eeprom.h"
 #include "diag.h"
+#include "TMCStepper.h"
 
 #include <Arduino.h>
-
 
 #define DBG _dbg0 //debug level 0
 //#define DBG(...)  //disable debug
 
+extern void USBSerial_put_rx_data(uint8_t* buffer, uint32_t length);
 
-extern void USBSerial_put_rx_data(uint8_t *buffer, uint32_t length);
-
-
-extern "C"
-{
+extern "C" {
 
 extern void init_tmc(void);
 
-extern uartrxbuff_t uart6rxbuff;       // PUT rx buffer
-extern uartslave_t uart6slave;         // PUT slave
+extern uartrxbuff_t uart6rxbuff; // PUT rx buffer
+extern uartslave_t uart6slave; // PUT slave
 
 #ifdef ETHERNET
 extern osThreadId webServerTaskHandle; // Webserver thread(used for fast boot mode)
@@ -50,129 +47,144 @@ extern osThreadId webServerTaskHandle; // Webserver thread(used for fast boot mo
 extern IWDG_HandleTypeDef hiwdg; //watchdog handle
 #endif //_DEBUG
 
-
 void app_setup(void)
 {
-	setup();
+    setup();
 
-	init_tmc();
-	//DBG("after init_tmc (%ld ms)", HAL_GetTick());
+    init_tmc();
+    //DBG("after init_tmc (%ld ms)", HAL_GetTick());
 }
 
 void app_idle(void)
 {
-	osDelay(0); // switch to other threads - without this is UI slow during printing
+    osDelay(0); // switch to other threads - without this is UI slow during printing
 }
+
+bool canSampleStall = false;
+int stall = 0;
+int prevStall = 0;
 
 void app_run(void)
 {
-	DBG("app_run");
+    DBG("app_run");
 
 #ifdef ETHERNET
-	if(diag_fastboot)
-		osThreadResume(webServerTaskHandle);
+    if (diag_fastboot)
+        osThreadResume(webServerTaskHandle);
 #endif //ETHERNET
 
-	eeprom_init();
+    eeprom_init();
 
-	marlin_server_init();
-	marlin_server_idle_cb = app_idle;
+    marlin_server_init();
+    marlin_server_idle_cb = app_idle;
 
-	adc_init();
+    adc_init();
 
 #ifdef SIM_HEATER
-	sim_heater_init();
+    sim_heater_init();
 #endif //SIM_HEATER
 
-	//DBG("before setup (%ld ms)", HAL_GetTick());
-	//if (diag_fastboot || (!sys_fw_is_valid()))
-	//	marlin_server_stop_processing();
-	//else
-		app_setup();
-	//DBG("after setup (%ld ms)", HAL_GetTick());
+    DBG("before setup (%ld ms)", HAL_GetTick());
+    //if (diag_fastboot || (!sys_fw_is_valid()))
+    //	marlin_server_stop_processing();
+    //else
+    app_setup();
+    DBG("after setup (%ld ms)", HAL_GetTick());
 
-	while (1)
-	{
-		if (marlin_server_processing())
-		{
-			loop();
-		}
-		uartslave_cycle(&uart6slave);
-		marlin_server_loop();
-		osDelay(0); // switch to other threads - without this is UI slow
+    canSampleStall = true;
+    while (1) {
+        if (marlin_server_processing()) {
+            loop();
+        }
+        uartslave_cycle(&uart6slave);
+        marlin_server_loop();
+        osDelay(0); // switch to other threads - without this is UI slow
 #ifdef JOGWHEEL_TRACE
-		static int signals = jogwheel_signals;
-		if (signals != jogwheel_signals)
-		{
-			signals = jogwheel_signals;
-			DBG("%d %d", signals, jogwheel_encoder);
-		}
+        static int signals = jogwheel_signals;
+        if (signals != jogwheel_signals) {
+            signals = jogwheel_signals;
+            DBG("%d %d", signals, jogwheel_encoder);
+        }
 #endif //JOGWHEEL_TRACE
 #ifdef SIM_MOTION_TRACE_X
-		static int32_t x = sim_motion_pos[0];
-		if (x != sim_motion_pos[0])
-		{
-			x = sim_motion_pos[0];
-			DBG("X:%li", x);
-		}
+        static int32_t x = sim_motion_pos[0];
+        if (x != sim_motion_pos[0]) {
+            x = sim_motion_pos[0];
+            DBG("X:%li", x);
+        }
 #endif //SIM_MOTION_TRACE_X
 #ifdef SIM_MOTION_TRACE_Y
-		static int32_t y = sim_motion_pos[1];
-		if (y != sim_motion_pos[1])
-		{
-			y = sim_motion_pos[1];
-			DBG("Y:%li", y);
-		}
+        static int32_t y = sim_motion_pos[1];
+        if (y != sim_motion_pos[1]) {
+            y = sim_motion_pos[1];
+            DBG("Y:%li", y);
+        }
 #endif //SIM_MOTION_TRACE_Y
 #ifdef SIM_MOTION_TRACE_Z
-		static int32_t z = sim_motion_pos[2];
-		if (z != sim_motion_pos[2])
-		{
-			z = sim_motion_pos[2];
-			DBG("Z:%li", z);
-		}
+        static int32_t z = sim_motion_pos[2];
+        if (z != sim_motion_pos[2]) {
+            z = sim_motion_pos[2];
+            DBG("Z:%li", z);
+        }
 #endif //SIM_MOTION_TRACE_Z
-	}
 
+        if (stall != prevStall) {
+            DBG("StallGuard %d", stall);
+            prevStall = stall;
+        }
+    }
 }
 
 void app_error(void)
 {
-	bsod("app_error");
+    bsod("app_error");
 }
 
-void app_assert(uint8_t *file, uint32_t line)
+void app_assert(uint8_t* file, uint32_t line)
 {
-	bsod("app_assert");
+    bsod("app_assert");
 }
 
-void app_cdc_rx(uint8_t *buffer, uint32_t length)
+void app_cdc_rx(uint8_t* buffer, uint32_t length)
 {
-	USBSerial_put_rx_data(buffer, length);
+    USBSerial_put_rx_data(buffer, length);
 }
 
 void app_tim6_tick(void)
 {
-	adc_cycle();
+    adc_cycle();
 #ifdef SIM_HEATER
-	static uint8_t cnt_sim_heater = 0;
-	if (++cnt_sim_heater >= 50) // sim_heater freq = 20Hz
-	{
-		sim_heater_cycle();
-		cnt_sim_heater = 0;
-	}
+    static uint8_t cnt_sim_heater = 0;
+    if (++cnt_sim_heater >= 50) // sim_heater freq = 20Hz
+    {
+        sim_heater_cycle();
+        cnt_sim_heater = 0;
+    }
 #endif //SIM_HEATER
 #ifdef SIM_MOTION
-	sim_motion_cycle();
+    sim_motion_cycle();
 #endif //SIM_MOTION
 }
 
+int counter = 0;
+
+extern TMC2209Stepper stepperE0;
+
+
 void app_tim14_tick(void)
 {
-	jogwheel_update_1ms();
-	hwio_update_1ms();
-}
+    jogwheel_update_1ms();
+    hwio_update_1ms();
 
+    if (canSampleStall && ++counter % 100 == 0) {
+    
+//        stall = stepperE0.SG_RESULT();
+    }
+
+    // f / 10
+    // flag can sample
+    // globalni promena
+}
 
 } // extern "C"
 
