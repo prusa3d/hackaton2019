@@ -114,8 +114,8 @@ void gui_run(void)
     window_msgbox_id_icon[3] = IDR_PNG_header_icon_warning;
     window_msgbox_id_icon[4] = IDR_PNG_header_icon_info;
 
-    if (!sys_fw_is_valid())
-        update_firmware_screen();
+    //if (!sys_fw_is_valid())
+    //    update_firmware_screen();
 
     gui_marlin_vars = marlin_client_init();
 
