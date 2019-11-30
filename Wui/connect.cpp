@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../Marlin/src/module/temperature.h"
+#include "variable_resolvers.h"
 
 #ifdef RFC1123_DATETIME
 	#define LAST_MODIFY RFC1123_DATETIME
@@ -95,6 +96,22 @@ struct BufferResponse_t {
 	}
 };
 
+struct JsonResponse_t {
+	const char* response = nullptr;
+	Header_t* headers = nullptr;
+	char buffer[256] = {'\0'};
+	bool done = false;
+
+	char *segmentStart;
+	char *segmentEnd;
+
+	~JsonResponse_t()
+	{
+		free(headers);
+	}
+};
+
+
 Message_t file_coroutine(void* arg)
 {
 	Message_t msg = {nullptr, nullptr, nullptr, EOF};
@@ -127,6 +144,53 @@ Message_t buffer_coroutine(void* arg)
 			msg = {res->response, res->headers,(const uint8_t*)res->buffer,
 					(int)strlen(res->buffer)};
 			res->done = true;
+		}
+	}
+	return msg;
+}
+
+Message_t json_coroutine(void* arg)
+{
+	//const char* dummny = "This is dummy data. ";
+	Message_t msg = {nullptr, nullptr, nullptr, EOF};
+
+	if (arg != nullptr)
+	{
+		JsonResponse_t* res = (JsonResponse_t*)arg;
+		if (res->done){
+			delete res;
+		} else {
+			if(res->segmentStart==nullptr)
+			{
+				msg = {res->response, res->headers, nullptr, 0};
+				res->segmentStart = res->segmentEnd;
+			} else {
+				res->segmentStart = res->segmentEnd;
+				int len;
+				if(*res->segmentStart=='$')
+				{	//promenna
+					while(*res->segmentEnd)
+					{
+						res->segmentEnd++;
+						if(!isalnum(*res->segmentEnd) && *res->segmentEnd!='_')	//konec id promenne
+							break;
+					}
+					len = (int)(res->segmentEnd-res->segmentStart);
+					const char *val = getVariableValue(res->segmentStart, len);
+					msg = {nullptr, nullptr, (const uint8_t*)val, (int)strlen(val) };
+				} else {	//staticka cast
+					while(*res->segmentEnd)
+					{
+						res->segmentEnd++;
+						if(*res->segmentEnd=='$')
+							break;
+					}
+					len = (int)(res->segmentEnd-res->segmentStart);
+					msg = {nullptr, nullptr, (const uint8_t*)res->segmentStart, len };
+				}
+				if(len <= 0)
+					res->done = true;
+			}
 		}
 	}
 	return msg;
@@ -167,6 +231,9 @@ coroutine_fn api_printer(Environment_t* env, void** arg)
 	float target_heatbed = 16;
 	#endif
 
+	//"<html><body><%promena%></body></html>"
+	//"{""\"teplota\":"" $actual_nozzle""}"
+
 	snprintf(res->buffer, 256,
 		"{\"temperature\":{"
 			"\"tool0\":{\"actual\":%f, \"target\":%f},"
@@ -190,6 +257,27 @@ coroutine_fn not_found(Environment_t* env, void** arg)
 
 	return &buffer_coroutine;
 }
+
+coroutine_fn api_gif(Environment_t* env, void** arg)
+{
+	JsonResponse_t* res = new JsonResponse_t();
+	*arg = res;
+
+	res->response = HTTP_200;
+	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
+	*res->headers = {"Content-Type", "application/json", nullptr};
+	res->segmentStart = nullptr;
+	//res->segmentEnd = nullptr;
+
+	res->segmentEnd = "{\"temperature\":{"
+				"\"tool0\":{\"actual\":$actual_nozzle, \"target\":$target_nozzle},"
+				"\"bed\":{\"actual\":$actual_heatbed, \"target\":$target_heatbed}},"
+				"\"test\":\"$test_float+$test_int+$test_string+$TEMP_NOZ\"}";
+
+	//snprintf(res->buffer, 256, "{%s}", getVariableValue("actual_nozzle"));
+	return &json_coroutine;
+}
+
 
 
 coroutine_fn application(Environment_t * env, void** arg){
@@ -221,6 +309,8 @@ coroutine_fn application(Environment_t * env, void** arg){
 		return api_job(env, arg);
 	} else if (!strcmp(env->request_uri, "/api/printer")){
 		return api_printer(env, arg);
+	} else if (!strcmp(env->request_uri, "/api/gif")) {
+		return api_gif(env, arg);
 	}
 
 	return not_found(env, arg);
