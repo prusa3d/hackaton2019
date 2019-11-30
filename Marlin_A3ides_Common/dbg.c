@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include "stm32f4xx_hal.h"
 #include "log_file.h"
+#include "logger.h"
 
 #define DBG_MAXLINE 128
 
@@ -113,6 +114,8 @@ void _new_dbg(log_level_t level, log_module_t module, uint32_t code, const char*
 	/* TODO: Replace by write to SPI flash */
 	log_msg_to_json(&msg, json, &json_len);
 	_dbg(json);
+
+	//log_message(LOGCONTEXT_TimeCritical, level, module, code, msg.message);
 }
 
 void _dbg_cdc(const char* fmt, ...)

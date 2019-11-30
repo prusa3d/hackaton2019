@@ -95,6 +95,12 @@ int screen_logging_event(screen_t* screen, window_t* window, uint8_t event, void
 	FRESULT ret;
 	uint32_t wb;
 
+	uint32_t next_message = 0;
+	log_message_t message;
+
+	char json[MAX_JSON_LEN];
+	uint32_t json_len;
+
     if (event == WINDOW_EVENT_CLICK)
         switch ((int)param) {
         case TAG_QUIT:
@@ -102,11 +108,21 @@ int screen_logging_event(screen_t* screen, window_t* window, uint8_t event, void
             return 1;
 
         case TAG_SAVE:
-            ret = f_open(&logFile, (const TCHAR*)"log1.txt", FA_CREATE_NEW | FA_WRITE | FA_READ);
+        	ret = f_open(&logFile, (const TCHAR*)"log1.txt", FA_CREATE_NEW | FA_WRITE | FA_READ);
 
-            if (ret == FR_OK) ret = f_write(&logFile, "Kuk", 3, (void*)&wb);
-            if (ret == FR_OK) ret = f_sync(&logFile);
-            if (ret == FR_OK) ret = f_close(&logFile);
+        	next_message = get_next_logged_message(&message.timestamp, &message.level, &message.module, &message.code, &message.message);
+        	if (next_message)
+        	{
+        		// while () {
+        		message.message_length = strlen(message.message);
+        		log_msg_to_json(&message, json, &json_len);
+
+        		if (ret == FR_OK) ret = f_write(&logFile, json, json_len, (void*)&wb);
+        		if (ret != FR_OK) _dbg(json);
+        	}
+
+        	ret = f_sync(&logFile);
+        	ret = f_close(&logFile);
 
         	if (ret == FR_OK)
         	{
@@ -119,6 +135,7 @@ int screen_logging_event(screen_t* screen, window_t* window, uint8_t event, void
             return 1;
 
         case TAG_ERRASE:
+        	//test_logger();
         	_new_dbg(LOGLEVEL_DEBUG, LOGMODULE_GUI, 1002, "Erase log memory.");
             return 1;
         }

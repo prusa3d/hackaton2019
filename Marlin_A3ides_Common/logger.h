@@ -37,7 +37,14 @@ typedef enum
 
 typedef struct
 {
-	uint32_t	timestamp;
+	uint16_t	logger_version;		//value 0xFFFF is reserved for empty page
+	uint16_t	page_number;
+	//TODO add CRC
+} log_page_header_t;
+
+typedef struct
+{
+	uint32_t	timestamp;		//cannot be 0xFFFFFFFF
 	uint8_t		level;
 	uint16_t	module;
 	uint32_t	code;
@@ -49,6 +56,11 @@ typedef struct
 
 
 void log_message( log_context_t context, log_level_t level, log_module_t module, uint32_t code, const char* message );
+
+void test_logger();
+
+void init_logger_reading();
+uint32_t get_next_logged_message( uint32_t*	pTimestamp, log_level_t* pLevel, log_module_t* pModule, uint32_t* pCode, char* pMessage );
 
 
 #ifdef __cplusplus

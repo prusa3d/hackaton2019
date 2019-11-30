@@ -1,6 +1,7 @@
 #include "ff.h"
 #include "log_file.h"
 #include "dbg.h"
+#include "logger.h"
 
 static FIL logFile;
 
@@ -78,7 +79,7 @@ void log_msg_to_json(log_message_t *message, char* json, uint32_t* json_len)
 			break;
 	}
 
-	snprintf(json, MAX_JSON_LEN, "\r{\"ms\":%d, \"type\":\"%s\", \"src\":\"%s\", \"code\":%d, \"msg\":\"%s\"},", (int)message->timestamp, level, module, (int)message->code, message->message);
+	snprintf(json, MAX_JSON_LEN, "\r{\"ms\":%d, \"type\":\"%s\", \"source\":\"%s\", \"code\":%d, \"message\":\"%s\"},", (int)message->timestamp, level, module, (int)message->code, message->message);
 	*json_len = strlen(text);
 }
 

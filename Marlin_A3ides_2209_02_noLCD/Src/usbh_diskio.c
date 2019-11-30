@@ -178,11 +178,14 @@ DRESULT USBH_write(BYTE lun, const BYTE* buff, DWORD sector, UINT count)
 {
     DRESULT res = RES_ERROR;
     MSC_LUNTypeDef info;
+    uint8_t error;
 
     if (USBH_MSC_Write(&hUSB_Host, lun, sector, (BYTE*)buff, count) == USBH_OK) {
         res = RES_OK;
     } else {
         USBH_MSC_GetLUNInfo(&hUSB_Host, lun, &info);
+
+        error = info.sense.asc;
 
         switch (info.sense.asc) {
         case SCSI_ASC_WRITE_PROTECTED:

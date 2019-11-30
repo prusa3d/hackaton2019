@@ -128,9 +128,11 @@ int screen_test_event(screen_t* screen, window_t* window, uint8_t event, void* p
         }
     else if (event == WINDOW_EVENT_TIMER) {
         if ((int)param == pd->id_tim)
-            _dbg("tim0 %lu", HAL_GetTick());
+        	_new_dbg(LOGLEVEL_DEBUG, LOGMODULE_GUI, 1005, "TIM0: %lu", HAL_GetTick());
+            //_dbg("tim0 %lu", HAL_GetTick());
         else if ((int)param == pd->id_tim1)
-            _dbg("tim1 %lu", HAL_GetTick());
+        	_new_dbg(LOGLEVEL_DEBUG, LOGMODULE_GUI, 1005, "TIM1: %lu", HAL_GetTick());
+            //_dbg("tim1 %lu", HAL_GetTick());
         return 1;
     }
     return 0;
