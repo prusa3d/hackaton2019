@@ -7,9 +7,9 @@
 //DBG - debug/trace configuration
 #define DBG_RTOS       // use FreeRTOS (semaphore and osDelay instead of HAL_Delay)
 #ifdef _DEBUG
-#define DBG_SWO        // trace to swo port
+//#define DBG_SWO        // trace to swo port
 //#define DBG_UART     6 // trace to uart6 port
-//#define DBG_CDC        // trace to cdc port
+#define DBG_CDC        // trace to cdc port
 #define DBG_LEVEL    1 // debug level (0..3)
 #else
 //#define DBG_SWO        // trace to swo port
