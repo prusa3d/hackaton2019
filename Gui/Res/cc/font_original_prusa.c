@@ -8410,6 +8410,7 @@ const font_t font_original_prusa = {
     60,
     0,
     (uint16_t*)font_original_prusa_data,
+    NULL,
     0,
     4,
 };

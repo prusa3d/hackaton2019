@@ -19,7 +19,9 @@ void render_text_align(rect_ui16_t rc, const char* text, font_t* font, color_t c
                 i++;
             for (; i < n; i++) {
                 display->draw_char(point_ui16(x, y), str[i], font, clr0, clr1);
-                x += font->w;
+
+                x += font_char_width(font, str[i]);
+
             }
             display->fill_rect(rect_ui16(x, y, (rc_pad.x + rc_pad.w - x), font->h), clr0);
             str += n;

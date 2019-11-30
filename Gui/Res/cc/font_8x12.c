@@ -106,6 +106,7 @@ const font_t font_8x12 = {
     1,
     0,
     (uint8_t*)font_8x12_data,
+    NULL,
     32,
     127,
 };

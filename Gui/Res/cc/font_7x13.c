@@ -5002,6 +5002,7 @@ const font_t font_7x13 = {
     4,
     0,
     (uint16_t*)font_7x13_data,
+    NULL,
     32,
     127
 };

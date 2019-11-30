@@ -59,6 +59,10 @@
                 font-family: "Px437 IBM ISO9";
                 src: url(Px437_IBM_ISO9.ttf) format("truetype");
             }
+            @font-face {
+                font-family: "SourceSansPro";
+                src: url(SourceSansPro.ttf) format("truetype");
+            }
         </style>
     </head>
     <body>
@@ -81,6 +85,7 @@
 
             <label for="font">Font:</label>
             <select id="font" onchange="redraw()">
+                <option style="font-family: SourceSansPro">SourceSansPro</option>
                 <option style="font-family: Monospace">Monospace</option>
                 <option style="font-family: Monospace">Noto Mono</option>
                 <option style="font-family: Monospace">Liberation Mono</option>
@@ -131,6 +136,9 @@ Celý bílý kůň. CELÝ BÍLÝ KŮŇ
             </canvas>
         </div>
 
+        <div id="width_map">
+        </div>
+
 
 <script>
     var char_width = document.getElementById("width");
@@ -145,6 +153,7 @@ Celý bílý kůň. CELÝ BÍLÝ KŮŇ
     var bc = document.getElementById("black_map");
     var mc = document.getElementById("measure_map");
     var ec = document.getElementById("example_map");
+    var widthMap = document.getElementById("width_map")
 
     var log = document.getElementById("console");
 
@@ -212,6 +221,8 @@ Celý bílý kůň. CELÝ BÍLÝ KŮŇ
         let max_width = 0;
         let max_height = 0;
 
+        widthMap.innerHTML = "uint8_t font_char_widths[] = {<br>";
+
         bctx.strokeStyle = "green";
         for (let y=1; y<6; y++){        // 16 celých 256
             for (let x=1; x<16; x++){
@@ -238,11 +249,16 @@ Celý bílý kůň. CELÝ BÍLÝ KŮŇ
                 }
 
                 let width = Math.ceil(mctx.measureText(String.fromCharCode(character)).width);
+
+                widthMap.innerHTML += width + ",<br>";
+
                 let height = measureHight(String.fromCharCode(character), width);
                 max_width = Math.max(max_width, width);
                 max_height = Math.max(max_height, height);
             }
         }
+
+        widthMap.innerHTML += "};";
 
         log.textContent = "Maximum font character width is: "+max_width+" px.\n"+
                           "Maximum font character height is: "+max_height+" px.";

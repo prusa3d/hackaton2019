@@ -105,19 +105,19 @@ point_ui16_t font_meas_text(font_t* pf, const char* str)
     int y = 0;
     int w = 0;
     int h = 0;
-    int char_w = pf->w;
     int char_h = pf->h;
     int len = strlen(str);
     char c;
     while (len--) {
         c = *(str++);
         if (c == '\n') {
-            if (x + char_w > w)
-                w = x + char_w;
+            if (x > w)
+                w = x;
             y += char_h;
             x = 0;
-        } else
-            x += char_w;
+            continue;
+        }
+        x += font_char_width(pf, c);
         h = y + char_h;
     }
     if (x > w)
@@ -135,12 +135,19 @@ int font_line_chars(font_t* pf, const char* str, uint16_t line_width)
     // This is generally about finding the closest '\n' character within the current line to be drawn.
     // Line is limited by pixel dimension, all characters have the same fixed pixel size
     // Such character may not be found, so n becomes > len
-    while ((w + char_w) <= line_width) {
-        c = str[n++];
-        if (c == '\n')
+    while ((w + font_char_width(pf, str[n])) <= line_width) {
+        c = str[n];
+        if (c == '\n'){
+            n++;
             break;
-        else
-            w += char_w;
+        }
+
+        w += font_char_width(pf, str[n]);
+        n++;
+
+        if(n == len){
+            break;
+        }
     }
 
     // if the line width is >= than characters to be printed, skip further search
@@ -155,6 +162,14 @@ int font_line_chars(font_t* pf, const char* str, uint16_t line_width)
     if (n == 0)
         n = line_width / char_w;
     return n;
+}
+
+uint8_t font_char_width(font_t* pf, char c) {
+    if(pf->wpc == NULL) {
+        return pf->w;
+    }
+
+    return pf->wpc[c - pf->asc_min];
 }
 
 point_ui16_t icon_meas(const uint8_t* pi)

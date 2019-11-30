@@ -547,7 +547,7 @@ void st7789v_draw_char(point_ui16_t pt, char chr, font_t* pf, color_t clr0, colo
     uint8_t* pch; //character data pointer
     uint8_t crd = 0; //current row byte data
     uint8_t rb; //row byte
-    uint16_t w = pf->w; //cache width
+    uint16_t w = font_char_width(pf, chr); //cache width
     uint16_t h = pf->h; //..
     uint8_t bpr = pf->bpr; //bytes per row
     uint16_t bpc = bpr * h; //bytes per char
@@ -597,17 +597,22 @@ void st7789v_draw_text(rect_ui16_t rc, const char* str, font_t* pf, color_t clr0
     int y = rc.y;
     for (i = 0; i < len; i++) {
         char c = str[i];
+
         if (c == '\n') {
             y += pf->h;
             x = rc.x;
             if ((y + pf->h) > (rc.y + rc.h))
                 break;
-        } else {
-            st7789v_draw_char(point_ui16(x, y), c, pf, clr0, clr1);
-            x += pf->w;
-            if ((x + pf->w) > (rc.x + rc.w))
-                break;
+
+            continue;
+
         }
+
+        if ((x + font_char_width(pf, c)) > (rc.x + rc.w))
+            break;
+
+        st7789v_draw_char(point_ui16(x, y), c, pf, clr0, clr1);
+        x += font_char_width(pf, c);
     }
 }
 

@@ -5050,6 +5050,7 @@ const font_t font_original_prusa_mini = {
     60,
     0,
     (uint16_t*)font_original_prusa_mini_data,
+    NULL,
     0,
     2,
 };

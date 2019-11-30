@@ -105,6 +105,7 @@ const font_t font_12x12 = {
     2,
     FONT_FLG_SWAP,
     (uint16_t*)font_12x12_data,
+    NULL,
     32,
     127,
 };
