@@ -5,6 +5,8 @@
 #include "../Marlin/src/module/temperature.h"
 #include "variable_resolvers.h"
 
+#include "jsmn.h"
+
 #ifdef RFC1123_DATETIME
 	#define LAST_MODIFY RFC1123_DATETIME
 #else
@@ -346,12 +348,24 @@ R"LSTR({
 	return &template_coroutine;
 }
 
-coroutine_fn api_printer_tool(Environment_t* env, void** arg)
+coroutine_fn api_printer_tool_get(Environment_t* env, void** arg)
 {
 	*arg = new TemplateResponse_t("{\"tool0\": { \"actual\": $TEMP_NOZ, \"target\": $TTEM_NOZ, \"offset\": 0} }");
 	return &template_coroutine;
 }
 
+coroutine_fn api_printer_tool_post(Environment_t* env, void** arg)
+{
+	*arg = new TemplateResponse_t("{\"tool0\": { \"actual\": $TEMP_NOZ, \"target\": $TTEM_NOZ, \"offset\": 0} }");
+	return &template_coroutine;
+
+	jsmn_parser p;
+	jsmntok_t t[128];
+	jsmn_init(&p);
+	//r = jsmn_parse(&p, env->body, strlen(env->body), t,
+	//sizeof(t) / sizeof(t[0]));
+
+}
 
 
 
@@ -396,8 +410,10 @@ coroutine_fn application(Environment_t * env, void** arg){
 	else if (!strcmp(env->request_uri, "/api/printer?history=true&exclude=state,sd")) {
 		return api_printer(env, arg);
 	}
-	else if (!strcmp(env->request_uri, "/api/printer/tool") || "") {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
-		return api_printer_tool(env, arg);
+	else if (!strcmp(env->method, "GET") && !strcmp(env->request_uri, "/api/printer/tool")) {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
+		return api_printer_tool_get(env, arg);
+	} else if (!strcmp(env->method, "POST") && !strcmp(env->request_uri, "/api/printer/tool")) {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
+		return api_printer_tool_post(env, arg);
 	} /*else if (!strcmp(env->request_uri, "/api/printer/tool")) {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
 		return api_version(env, arg);
 	}*/
