@@ -92,6 +92,8 @@ void screen_splash_draw(screen_t* screen)
 int screen_splash_event(screen_t* screen, window_t* window, uint8_t event, void* param)
 {
     screen_splash_timer(screen, HAL_GetTick());
+    screen_close();
+    screen_open(pscreen_home->id);
 
 #ifdef _EXTUI
     if (marlin_event(MARLIN_EVT_Startup)) {

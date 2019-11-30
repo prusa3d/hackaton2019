@@ -85,9 +85,9 @@ void app_run(void)
 #endif //SIM_HEATER
 
 	//DBG("before setup (%ld ms)", HAL_GetTick());
-	if (diag_fastboot || (!sys_fw_is_valid()))
-		marlin_server_stop_processing();
-	else
+	//if (diag_fastboot || (!sys_fw_is_valid()))
+	//	marlin_server_stop_processing();
+	//else
 		app_setup();
 	//DBG("after setup (%ld ms)", HAL_GetTick());
 

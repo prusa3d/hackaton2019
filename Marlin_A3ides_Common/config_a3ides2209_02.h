@@ -67,7 +67,7 @@
 
 //--------------------------------------
 //Simulator configuration
-//#define SIM_HEATER
+#define SIM_HEATER
 //#define SIM_MOTION
 
 #ifdef SIM_HEATER
