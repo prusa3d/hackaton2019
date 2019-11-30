@@ -89,6 +89,11 @@ VariableItem KnownVariables[] = {
 		{ "target_nozzle", EC_Float, (TFuncPtr)target_nozzle },
 		{ "actual_heatbed", EC_Float, (TFuncPtr)thermalManager.degBed },
 		{ "target_heatbed", EC_Float, (TFuncPtr)thermalManager.degTargetBed },
+
+		{ "TEMP_NOZ", EC_Float, (TFuncPtr)actual_nozzle /*(TFuncPtr)([]()->float { return thermalManager.degHotend(0); })*/ },
+		{ "TTEM_NOZ", EC_Float, (TFuncPtr)target_nozzle },
+		{ "TEMP_BED", EC_Float, (TFuncPtr)thermalManager.degBed },
+		{ "TTEM_BED", EC_Float, (TFuncPtr)thermalManager.degTargetBed },
 };
 
 const char *getVariableValue(const char *variableNameStart, int nameLen)
@@ -98,17 +103,6 @@ const char *getVariableValue(const char *variableNameStart, int nameLen)
 
 	variableNameStart++;	//uvodni $
 	nameLen--;
-
-	strncpy(tempBuffer, variableNameStart, nameLen);
-	tempBuffer[nameLen] = 0;
-
-	int id = marlin_vars_get_id_by_name(tempBuffer);
-	if(id >= 0)
-	{
-		//marlin_vars_value_to_str(marlin_vars(), id, tempBuffer);
-		marlin_vars_value_to_str(MarlinVarsForResolver, id, tempBuffer);
-		return tempBuffer;
-	}
 
 	int cnt = sizeof(KnownVariables) / sizeof(VariableItem);
 	for (int i = 0; i < cnt; i++)
@@ -125,6 +119,19 @@ const char *getVariableValue(const char *variableNameStart, int nameLen)
 				return ConvertInt((int(*)())KnownVariables[i].funcPtr);
 			}
 		}
+	}
+
+	//marlin var by asi mohli byt pred KnownVariables, ale protoze nefunguji tak napred tabulka s fake
+
+	strncpy(tempBuffer, variableNameStart, nameLen);
+	tempBuffer[nameLen] = 0;
+
+	int id = marlin_vars_get_id_by_name(tempBuffer);
+	if(id >= 0)
+	{
+		//marlin_vars_value_to_str(marlin_vars(), id, tempBuffer);
+		marlin_vars_value_to_str(MarlinVarsForResolver, id, tempBuffer);
+		return tempBuffer;
 	}
 
 	return "\"unknown\"";

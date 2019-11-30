@@ -220,7 +220,7 @@ coroutine_fn api_job(Environment_t* env, void** arg)
 }
 
 
-coroutine_fn api_printer(Environment_t* env, void** arg)
+coroutine_fn api_printerOld(Environment_t* env, void** arg)
 {
 	BufferResponse_t *res = new BufferResponse_t();
 	*arg = res;
@@ -302,17 +302,58 @@ coroutine_fn api_post(Environment_t* env, void** arg)
 }
 
 
+
 coroutine_fn api_version(Environment_t* env, void** arg)
 {
 	*arg = new TemplateResponse_t("{ \"api\": \"0.1\", \"server\": \"1.3.10\", \"text\": \"OctoPrint 1.3.10\" }");
 	return &template_coroutine;
 }
 
-coroutine_fn api_printer_tool(Environment_t* env, void** arg)
+coroutine_fn api_printer(Environment_t* env, void** arg)
 {
-	*arg = new TemplateResponse_t("{\"tool0\": { \"actual\": $TEMP_NOZ, \"target\": $TTEM_NOZ, \"offset\": 0}, }");
+	*arg = new TemplateResponse_t(
+R"LSTR({
+  "temperature": {
+	"tool0": {
+	  "actual": $TEMP_NOZ,
+	  "target": $TTEM_NOZ,
+	  "offset": 0
+	},
+	"bed": {
+	  "actual": $TEMP_BED,
+	  "target": $TTEM_BED,
+	  "offset": 0
+	}    
+  },
+  "sd": {
+	"ready": true
+  },
+  "state": {
+	"text": "Operational",
+	"flags": {
+	  "operational": true,
+	  "paused": false,
+	  "printing": false,
+	  "cancelling": false,
+	  "pausing": false,
+	  "sdReady": true,
+	  "error": false,
+	  "ready": true,
+	  "closedOrError": false
+	}
+  }
+})LSTR");
 	return &template_coroutine;
 }
+
+coroutine_fn api_printer_tool(Environment_t* env, void** arg)
+{
+	*arg = new TemplateResponse_t("{\"tool0\": { \"actual\": $TEMP_NOZ, \"target\": $TTEM_NOZ, \"offset\": 0} }");
+	return &template_coroutine;
+}
+
+
+
 
 coroutine_fn application(Environment_t * env, void** arg){
 
@@ -352,9 +393,9 @@ coroutine_fn application(Environment_t * env, void** arg){
 	else if (!strcmp(env->request_uri, "/api/version")) {
 		return api_version(env, arg);
 	}
-	/*else if (!strcmp(env->request_uri, "/api/printer?history=true&exclude=state,sd")) {
-
-	}*/
+	else if (!strcmp(env->request_uri, "/api/printer?history=true&exclude=state,sd")) {
+		return api_printer(env, arg);
+	}
 	else if (!strcmp(env->request_uri, "/api/printer/tool") || "") {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
 		return api_printer_tool(env, arg);
 	} /*else if (!strcmp(env->request_uri, "/api/printer/tool")) {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
