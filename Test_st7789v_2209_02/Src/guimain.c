@@ -37,14 +37,15 @@ void gui_run(void)
     jogwheel_config = jogwheel_cfg;
     gui_init();
     gpio_init(PE12, GPIO_MODE_INPUT, GPIO_PULLUP, GPIO_SPEED_FREQ_LOW);
-    font_t* font = resource_font(IDR_FNT_SPECIAL);
-    font_t* font1 = resource_font(IDR_FNT_NORMAL);
+    font_t* font = resource_font(IDR_FNT_NORMAL);
 
     display->fill_rect(rect_ui16(0, 0, 240, 320), COLOR_BLACK);
     render_icon_align(rect_ui16(70, 20, 100, 100), IDR_PNG_icon_pepa, COLOR_BLACK, RENDER_FLG(ALIGN_CENTER, 0));
-    display->draw_text(rect_ui16(10, 115, 240, 60), "Hi, this is your\nOriginal Prusa MINI.", font, COLOR_BLACK, COLOR_WHITE);
-    display->draw_text(rect_ui16(10, 160, 240, 80), "Please insert the USB\ndrive that came with\nyour MINI and reset\nthe printer to flash\nthe firmware", font, COLOR_BLACK, COLOR_WHITE);
-    render_text_align(rect_ui16(5, 250, 230, 40), "RESET PRINTER", font1, COLOR_ORANGE, COLOR_WHITE, padding_ui8(2, 6, 2, 2), ALIGN_CENTER);
+//    display->draw_text(rect_ui16(10, 115, 240, 60), "Hi, this is your Original Prusa\nMINI.", font, COLOR_BLACK, COLOR_WHITE);
+//    display->draw_text(rect_ui16(10, 160, 240, 80), "Please insert the USB drive\nthat came with your MINI and\nreset the printer to flash the\nfirmware", font, COLOR_BLACK, COLOR_WHITE);
+    render_text_align(rect_ui16(5, 115, 230, 60), "Hi, this is your Original Prusa MINI.", font, COLOR_ORANGE, COLOR_WHITE, padding_ui8(2, 6, 2, 2), ALIGN_LEFT | RENDER_FLG_WORDB);
+    render_text_align(rect_ui16(5, 160, 230, 80), "Please insert the USB drive that came with your MINI and reset the printer to flash the firmware", font, COLOR_ORANGE, COLOR_WHITE, padding_ui8(2, 6, 2, 2), ALIGN_LEFT | RENDER_FLG_WORDB);
+    render_text_align(rect_ui16(5, 250, 230, 40), "RESET PRINTER", font, COLOR_ORANGE, COLOR_WHITE, padding_ui8(2, 6, 2, 2), ALIGN_CENTER);
     while (1) {
         if (!gpio_get(PE12)) {
             sys_reset();

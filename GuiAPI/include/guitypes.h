@@ -86,6 +86,7 @@ typedef struct _font_t
 	uint8_t bpr;   //bytes per row
 	uint32_t flg;  //flags
 	void* pcs;     //charset data pointer
+	uint8_t* wpc;  //width per character
 	char asc_min;  //min ascii code (first character)
 	char asc_max;  //max ascii code (last character)
 } font_t;
@@ -222,6 +223,9 @@ extern rect_ui16_t rect_align_ui16(rect_ui16_t rc, rect_ui16_t rc1, uint8_t alig
 extern point_ui16_t font_meas_text(font_t* pf, const char* str);
 
 extern int font_line_chars(font_t* pf, const char* str, uint16_t line_width);
+
+extern uint8_t font_char_width(font_t* pf, char c);
+
 
 extern point_ui16_t icon_meas(const uint8_t* pi);
 

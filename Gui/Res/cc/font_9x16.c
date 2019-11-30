@@ -7690,6 +7690,7 @@ const font_t font_9x16 = {
     5,
     0,
     (uint16_t*)font_9x16_data,
+    NULL,
     32,
     127
 };
