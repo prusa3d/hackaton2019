@@ -99,11 +99,21 @@ struct BufferResponse_t {
 struct TemplateResponse_t {
 	const char* response = nullptr;
 	Header_t* headers = nullptr;
-	char buffer[256] = {'\0'};
+	//char buffer[256] = {'\0'};
 	bool done = false;
 
 	const char *segmentStart;
 	const char *segmentEnd;
+
+	TemplateResponse_t(const char *tempate)
+	{
+		response = HTTP_200;
+
+		headers = (Header_t*)calloc(1, sizeof(Header_t));
+		*headers = {"Content-Type", "application/json", nullptr};
+		segmentStart = nullptr;
+		segmentEnd = tempate;
+	}
 
 	~TemplateResponse_t()
 	{
@@ -260,21 +270,19 @@ coroutine_fn not_found(Environment_t* env, void** arg)
 
 coroutine_fn api_gif(Environment_t* env, void** arg)
 {
-	TemplateResponse_t* res = new TemplateResponse_t();
-	*arg = res;
-
-	res->response = HTTP_200;
-	res->headers = (Header_t*)calloc(1, sizeof(Header_t));
-	*res->headers = {"Content-Type", "application/json", nullptr};
-	res->segmentStart = nullptr;
-	//res->segmentEnd = nullptr;
-
-	res->segmentEnd = "{\"temperature\":{"
+	const char *tmp = "{\"temperature\":{"
 				"\"tool0\":{\"actual\":$actual_nozzle, \"target\":$target_nozzle},"
 				"\"bed\":{\"actual\":$actual_heatbed, \"target\":$target_heatbed}},"
 				"\"test\":\"$test_float+$test_int+$test_string+$TEMP_NOZ\"}";
 
-	//snprintf(res->buffer, 256, "{%s}", getVariableValue("actual_nozzle"));
+	TemplateResponse_t* res = new TemplateResponse_t(tmp);
+	*arg = res;
+
+	//res->response = HTTP_200;
+	//res->headers = (Header_t*)calloc(1, sizeof(Header_t));
+	//*res->headers = {"Content-Type", "application/json", nullptr};
+	//res->segmentStart = nullptr;
+
 	return &template_coroutine;
 }
 
@@ -291,6 +299,19 @@ coroutine_fn api_post(Environment_t* env, void** arg)
 	//snprintf(res->buffer, 256, "Not yet");
 
 	return &buffer_coroutine;
+}
+
+
+coroutine_fn api_version(Environment_t* env, void** arg)
+{
+	*arg = new TemplateResponse_t("{ \"api\": \"0.1\", \"server\": \"1.3.10\", \"text\": \"OctoPrint 1.3.10\" }");
+	return &template_coroutine;
+}
+
+coroutine_fn api_printer_tool(Environment_t* env, void** arg)
+{
+	*arg = new TemplateResponse_t("{\"tool0\": { \"actual\": $TEMP_NOZ, \"target\": $TTEM_NOZ, \"offset\": 0}, }");
+	return &template_coroutine;
 }
 
 coroutine_fn application(Environment_t * env, void** arg){
@@ -327,6 +348,21 @@ coroutine_fn application(Environment_t * env, void** arg){
 	} else if (!strcmp(env->request_uri, "/api/post")) {
 		return api_post(env, arg);
 	}
+
+	else if (!strcmp(env->request_uri, "/api/version")) {
+		return api_version(env, arg);
+	}
+	/*else if (!strcmp(env->request_uri, "/api/printer?history=true&exclude=state,sd")) {
+
+	}*/
+	else if (!strcmp(env->request_uri, "/api/printer/tool") || "") {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
+		return api_printer_tool(env, arg);
+	} /*else if (!strcmp(env->request_uri, "/api/printer/tool")) {	//"{\"command\":\"target\",\"offsets\":{},\"targets\":{\"tool0\":12},\"toolNumber\":0}"
+		return api_version(env, arg);
+	}*/
+
+	//"/api/printer?history=true&exclude=state,sd"
+
 
 	return not_found(env, arg);
 }
