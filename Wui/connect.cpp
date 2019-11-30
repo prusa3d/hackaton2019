@@ -102,8 +102,8 @@ struct TemplateResponse_t {
 	char buffer[256] = {'\0'};
 	bool done = false;
 
-	char *segmentStart;
-	char *segmentEnd;
+	const char *segmentStart;
+	const char *segmentEnd;
 
 	~TemplateResponse_t()
 	{

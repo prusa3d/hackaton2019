@@ -4,6 +4,7 @@
 
 #include "lwsapi.h"
 #include "../Common/marlin_client.h"
+#include "variable_resolvers.h"
 
 #define LIGHT_WSAPI_PORT 80
 #define LIGHT_WSAPI_RETRIES 4              // 8 seconds timeout
@@ -519,8 +520,8 @@ err_t lwsapi_init(void){
 		return ERR_CLSD;
 	}
 
-	//TODO sem?
-	marlin_client_init();
+	//TODO viz. MarlinVarsForResolver
+	MarlinVarsForResolver = marlin_client_init();
 
 	tcp_accept(pcb, lwsapi_accept);
 	return ERR_OK;

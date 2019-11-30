@@ -13,6 +13,9 @@ typedef float (*resolv_fn)();
 //typedef const void* (resolv_fn)();
 typedef const void (*TFuncPtr)();
 
+//FIXME volani resolveru zrejme probiha na jinem vlakne nez kde se inicializuje lwsapi, takze si uchovame marlinVars pro pozdejsi pouziti
+marlin_vars_t* MarlinVarsForResolver;
+
 enum EConversion
 {
 	EC_String,
@@ -82,7 +85,7 @@ VariableItem KnownVariables[] = {
 		{ "test_int", EC_Int, (TFuncPtr)test_int },
 		{ "test_string", EC_String, (TFuncPtr)test_string },
 
-		{ "actual_nozzle", EC_Float, (TFuncPtr)actual_nozzle },
+		{ "actual_nozzle", EC_Float, (TFuncPtr)actual_nozzle /*(TFuncPtr)([]()->float { return thermalManager.degHotend(0); })*/ },
 		{ "target_nozzle", EC_Float, (TFuncPtr)target_nozzle },
 		{ "actual_heatbed", EC_Float, (TFuncPtr)thermalManager.degBed },
 		{ "target_heatbed", EC_Float, (TFuncPtr)thermalManager.degTargetBed },
@@ -102,7 +105,8 @@ const char *getVariableValue(const char *variableNameStart, int nameLen)
 	int id = marlin_vars_get_id_by_name(tempBuffer);
 	if(id >= 0)
 	{
-		marlin_vars_value_to_str(marlin_vars(), id, tempBuffer);
+		//marlin_vars_value_to_str(marlin_vars(), id, tempBuffer);
+		marlin_vars_value_to_str(MarlinVarsForResolver, id, tempBuffer);
 		return tempBuffer;
 	}
 
